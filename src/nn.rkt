@@ -185,6 +185,26 @@
            (unless (fx= j width)
              (flvector-set! out (fx+ base j) 0.0)
              (loop-j (fx+ j 1))))]
+        ;; +inf - +inf is NaN, so a row that contains +inf cannot be
+        ;; shifted. The infinite positions share the mass and the rest are 0.
+        [(fl= maxv +inf.0)
+         (define count
+           (let loop-j ([j 0] [n 0])
+             (if (fx= j width)
+                 n
+                 (loop-j (fx+ j 1)
+                         (if (fl= (flvector-ref src (fx+ base j)) +inf.0)
+                             (fx+ n 1)
+                             n)))))
+         (define share (fl/ 1.0 (fx->fl count)))
+         (let loop-j ([j 0])
+           (unless (fx= j width)
+             (define idx (fx+ base j))
+             (flvector-set! out idx
+                            (if (fl= (flvector-ref src idx) +inf.0)
+                                share
+                                0.0))
+             (loop-j (fx+ j 1))))]
         [else
          (define sum
            (let loop-j ([j 0] [s 0.0])

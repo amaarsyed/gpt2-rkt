@@ -1,0 +1,679 @@
+{
+  "reference": "tiktoken gpt2 and transformers GPT2Tokenizer",
+  "tiktoken": "0.9.0",
+  "transformers": "4.46.3",
+  "revision": "607a30d783dfa663caf39e06633721c8d4cfcd7e",
+  "cases": [
+    {
+      "name": "empty",
+      "text": "",
+      "ids": []
+    },
+    {
+      "name": "hello",
+      "text": "hello",
+      "ids": [
+        31373
+      ]
+    },
+    {
+      "name": "hello-leading-space",
+      "text": " Hello",
+      "ids": [
+        18435
+      ]
+    },
+    {
+      "name": "hello-trailing-space",
+      "text": "hello ",
+      "ids": [
+        31373,
+        220
+      ]
+    },
+    {
+      "name": "repeated-spaces",
+      "text": "hello  world",
+      "ids": [
+        31373,
+        220,
+        995
+      ]
+    },
+    {
+      "name": "leading-repeated-space",
+      "text": "  a",
+      "ids": [
+        220,
+        257
+      ]
+    },
+    {
+      "name": "trailing-repeated-spaces",
+      "text": "a  b  ",
+      "ids": [
+        64,
+        220,
+        275,
+        220,
+        220
+      ]
+    },
+    {
+      "name": "two-spaces",
+      "text": "  ",
+      "ids": [
+        220,
+        220
+      ]
+    },
+    {
+      "name": "three-spaces",
+      "text": "a   b",
+      "ids": [
+        64,
+        220,
+        220,
+        275
+      ]
+    },
+    {
+      "name": "four-spaces",
+      "text": "a    b",
+      "ids": [
+        64,
+        220,
+        220,
+        220,
+        275
+      ]
+    },
+    {
+      "name": "space-newline-space",
+      "text": "a \n b",
+      "ids": [
+        64,
+        220,
+        198,
+        275
+      ]
+    },
+    {
+      "name": "space-then-newline",
+      "text": " \n",
+      "ids": [
+        220,
+        198
+      ]
+    },
+    {
+      "name": "newline-run",
+      "text": "x\n\n\ny",
+      "ids": [
+        87,
+        628,
+        198,
+        88
+      ]
+    },
+    {
+      "name": "tab-run",
+      "text": "\t\tfoo",
+      "ids": [
+        197,
+        197,
+        21943
+      ]
+    },
+    {
+      "name": "newline",
+      "text": "\n",
+      "ids": [
+        198
+      ]
+    },
+    {
+      "name": "double-newline",
+      "text": "\n\n",
+      "ids": [
+        628
+      ]
+    },
+    {
+      "name": "tab",
+      "text": "\t",
+      "ids": [
+        197
+      ]
+    },
+    {
+      "name": "vertical-tab",
+      "text": "\u000b",
+      "ids": [
+        199
+      ]
+    },
+    {
+      "name": "form-feed",
+      "text": "\f",
+      "ids": [
+        200
+      ]
+    },
+    {
+      "name": "next-line",
+      "text": "",
+      "ids": [
+        126,
+        227
+      ]
+    },
+    {
+      "name": "line-separator",
+      "text": " ",
+      "ids": [
+        447,
+        101
+      ]
+    },
+    {
+      "name": "ogham-space",
+      "text": " ",
+      "ids": [
+        157,
+        248,
+        222
+      ]
+    },
+    {
+      "name": "narrow-nbsp",
+      "text": " ",
+      "ids": [
+        447,
+        107
+      ]
+    },
+    {
+      "name": "file-separator",
+      "text": "\u001c",
+      "ids": [
+        216
+      ]
+    },
+    {
+      "name": "group-separator",
+      "text": "\u001d",
+      "ids": [
+        217
+      ]
+    },
+    {
+      "name": "record-separator",
+      "text": "\u001e",
+      "ids": [
+        218
+      ]
+    },
+    {
+      "name": "unit-separator",
+      "text": "\u001f",
+      "ids": [
+        219
+      ]
+    },
+    {
+      "name": "space-file-separator",
+      "text": " \u001ca",
+      "ids": [
+        220,
+        216,
+        64
+      ]
+    },
+    {
+      "name": "newlines-file-separator",
+      "text": "\n\n\u001ca",
+      "ids": [
+        198,
+        198,
+        216,
+        64
+      ]
+    },
+    {
+      "name": "space-group-separator",
+      "text": " \u001da",
+      "ids": [
+        220,
+        217,
+        64
+      ]
+    },
+    {
+      "name": "space-record-separator",
+      "text": " \u001ea",
+      "ids": [
+        220,
+        218,
+        64
+      ]
+    },
+    {
+      "name": "space-unit-separator",
+      "text": " \u001fa",
+      "ids": [
+        220,
+        219,
+        64
+      ]
+    },
+    {
+      "name": "zero-width-space",
+      "text": "a​b",
+      "ids": [
+        64,
+        9525,
+        65
+      ]
+    },
+    {
+      "name": "byte-order-mark",
+      "text": "a﻿b",
+      "ids": [
+        64,
+        171,
+        119,
+        123,
+        65
+      ]
+    },
+    {
+      "name": "mongolian-vowel-separator",
+      "text": "a᠎b",
+      "ids": [
+        64,
+        157,
+        254,
+        236,
+        65
+      ]
+    },
+    {
+      "name": "crlf",
+      "text": "\r\n",
+      "ids": [
+        201,
+        198
+      ]
+    },
+    {
+      "name": "nbsp",
+      "text": " ",
+      "ids": [
+        1849
+      ]
+    },
+    {
+      "name": "nbsp-word",
+      "text": " hello",
+      "ids": [
+        1849,
+        31373
+      ]
+    },
+    {
+      "name": "newline-nbsp",
+      "text": "\n ",
+      "ids": [
+        44320
+      ]
+    },
+    {
+      "name": "ideographic-space",
+      "text": "　",
+      "ids": [
+        5099,
+        222
+      ]
+    },
+    {
+      "name": "ideographic-word",
+      "text": "　hello",
+      "ids": [
+        5099,
+        222,
+        31373
+      ]
+    },
+    {
+      "name": "space-before-punct",
+      "text": " !",
+      "ids": [
+        5145
+      ]
+    },
+    {
+      "name": "spaces-before-punct",
+      "text": "  !!",
+      "ids": [
+        220,
+        37867
+      ]
+    },
+    {
+      "name": "comma-sentence",
+      "text": "hello, world!",
+      "ids": [
+        31373,
+        11,
+        995,
+        0
+      ]
+    },
+    {
+      "name": "accented",
+      "text": "café",
+      "ids": [
+        66,
+        1878,
+        2634
+      ]
+    },
+    {
+      "name": "decomposed-e-acute",
+      "text": "é",
+      "ids": [
+        68,
+        136,
+        223
+      ]
+    },
+    {
+      "name": "cjk",
+      "text": "你好",
+      "ids": [
+        19526,
+        254,
+        25001,
+        121
+      ]
+    },
+    {
+      "name": "emoji-wave",
+      "text": "👋",
+      "ids": [
+        41840,
+        233
+      ]
+    },
+    {
+      "name": "emoji-smile",
+      "text": "🙂",
+      "ids": [
+        8582,
+        25081
+      ]
+    },
+    {
+      "name": "zwj-emoji",
+      "text": "👩‍💻",
+      "ids": [
+        41840,
+        102,
+        447,
+        235,
+        8582,
+        240,
+        119
+      ]
+    },
+    {
+      "name": "contraction-lower",
+      "text": "I'm",
+      "ids": [
+        40,
+        1101
+      ]
+    },
+    {
+      "name": "contraction-upper",
+      "text": "I'M",
+      "ids": [
+        40,
+        6,
+        44
+      ]
+    },
+    {
+      "name": "contraction-dont",
+      "text": "don't",
+      "ids": [
+        9099,
+        470
+      ]
+    },
+    {
+      "name": "contraction-dont-upper",
+      "text": "DON'T",
+      "ids": [
+        41173,
+        6,
+        51
+      ]
+    },
+    {
+      "name": "apostrophe-s",
+      "text": "'s",
+      "ids": [
+        338
+      ]
+    },
+    {
+      "name": "apostrophe-s-upper",
+      "text": "'S",
+      "ids": [
+        6,
+        50
+      ]
+    },
+    {
+      "name": "curly-apostrophe",
+      "text": "it’s",
+      "ids": [
+        270,
+        447,
+        247,
+        82
+      ]
+    },
+    {
+      "name": "digits",
+      "text": "12345",
+      "ids": [
+        10163,
+        2231
+      ]
+    },
+    {
+      "name": "superscript-two",
+      "text": "²",
+      "ids": [
+        31185
+      ]
+    },
+    {
+      "name": "roman-twelve",
+      "text": "Ⅻ",
+      "ids": [
+        158,
+        227,
+        104
+      ]
+    },
+    {
+      "name": "arabic-indic-three",
+      "text": "٣",
+      "ids": [
+        149,
+        96
+      ]
+    },
+    {
+      "name": "digits-inside-word",
+      "text": "abc123def",
+      "ids": [
+        39305,
+        10163,
+        4299
+      ]
+    },
+    {
+      "name": "year-cjk",
+      "text": "2024年",
+      "ids": [
+        1238,
+        1731,
+        33176,
+        112
+      ]
+    },
+    {
+      "name": "punctuation",
+      "text": "...",
+      "ids": [
+        986
+      ]
+    },
+    {
+      "name": "hyphenated",
+      "text": "GPT-2",
+      "ids": [
+        38,
+        11571,
+        12,
+        17
+      ]
+    },
+    {
+      "name": "sentence",
+      "text": "The quick brown fox",
+      "ids": [
+        464,
+        2068,
+        7586,
+        21831
+      ]
+    },
+    {
+      "name": "paragraph",
+      "text": "The small model reads a paragraph one piece at a time, merges the most common pairs first, and keeps going until no listed pair remains. Spaces, punctuation, and the occasional number like 42 all sit in that same pass, so a long realistic paragraph is the check that rank order still holds once the input is longer than a handful of words.",
+      "ids": [
+        464,
+        1402,
+        2746,
+        9743,
+        257,
+        7322,
+        530,
+        3704,
+        379,
+        257,
+        640,
+        11,
+        4017,
+        3212,
+        262,
+        749,
+        2219,
+        14729,
+        717,
+        11,
+        290,
+        7622,
+        1016,
+        1566,
+        645,
+        5610,
+        5166,
+        3793,
+        13,
+        48086,
+        11,
+        21025,
+        2288,
+        11,
+        290,
+        262,
+        12209,
+        1271,
+        588,
+        5433,
+        477,
+        1650,
+        287,
+        326,
+        976,
+        1208,
+        11,
+        523,
+        257,
+        890,
+        12653,
+        7322,
+        318,
+        262,
+        2198,
+        326,
+        4279,
+        1502,
+        991,
+        6622,
+        1752,
+        262,
+        5128,
+        318,
+        2392,
+        621,
+        257,
+        10089,
+        286,
+        2456,
+        13
+      ]
+    },
+    {
+      "name": "endoftext",
+      "text": "<|endoftext|>",
+      "ids": [
+        50256
+      ]
+    },
+    {
+      "name": "endoftext-between",
+      "text": "a<|endoftext|>b",
+      "ids": [
+        64,
+        50256,
+        65
+      ]
+    },
+    {
+      "name": "endoftext-padded",
+      "text": " <|endoftext|> ",
+      "ids": [
+        220,
+        50256,
+        220
+      ]
+    },
+    {
+      "name": "not-the-special-token",
+      "text": "endoftext",
+      "ids": [
+        437,
+        1659,
+        5239
+      ]
+    }
+  ]
+}

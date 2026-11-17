@@ -8,9 +8,10 @@ Tested with Racket CS 9.3. CI installs that version and runs `raco test`. Python
 
 ## Commands
 
-Run the tests:
+Fetch the BPE files (about 1.5 MB; weights stay out of the tree), then run the tests:
 
 ```sh
+sh tools/fetch-gpt2-vocab.sh
 raco test .
 ```
 
@@ -59,6 +60,12 @@ racket bench/harness.rkt
 - `layer-norm` uses biased variance (divide by `n`), epsilon `1e-5`, and a gain and bias.
 - `gelu` is the GPT-2 tanh approximation.
 - `slice-rows`, `slice-cols`, `split-last`, and `tensor-reshape` cut and regroup axes for later `q`, `k`, `v`, and heads. Slices copy. Reshape shares the `flvector`.
+
+## Tokenizer and embeddings
+
+`encode` and `decode` are GPT-2 byte-level BPE. The byte map is reversible. The pre-tokenizer uses Unicode whitespace, not the ASCII-only class, and contractions are case-sensitive. `<|endoftext|>` is token 50256. Matching that literal in a prompt is tiktoken and HF behaviour, so the text `<|endoftext|>` encodes as 50256. `token-embed` and `position-embed` look up rows of `wte` and `wpe`. A sequence longer than 1024 positions is an error.
+
+The vocab and merges are pinned to `openai-community/gpt2` at `607a30d783dfa663caf39e06633721c8d4cfcd7e`. Their sha256 digests live in `tools/gpt2-assets.sha256`. `tools/fetch-gpt2-vocab.sh` checks them with `sha256sum`, or `shasum -a 256` when that is missing, and caches the files under `models/gpt2/`.
 
 ## Layout
 

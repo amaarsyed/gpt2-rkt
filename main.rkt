@@ -2,12 +2,16 @@
 
 ;; CLI entry and public API. Implementation lives under src/.
 
-(require "src/cli.rkt"
+(require "src/bpe-bytes.rkt"
+         "src/cli.rkt"
+         "src/embed.rkt"
          "src/errors.rkt"
          "src/generate.rkt"
          "src/model-assets.rkt"
          "src/nn.rkt"
-         "src/tensor.rkt")
+         "src/pretokenize.rkt"
+         "src/tensor.rkt"
+         "src/tokenizer.rkt")
 
 (provide run-cli
          parse-generate-args
@@ -40,7 +44,21 @@
          softmax
          layer-norm
          layernorm-eps
-         gelu)
+         gelu
+         bpe-byte->char
+         bpe-char->byte
+         gpt2-pretokenize
+         load-tokenizer
+         make-tokenizer
+         tokenizer?
+         encode
+         decode
+         endoftext-token
+         endoftext-id
+         gpt2-context-length
+         token-embed
+         position-embed
+         input-embed)
 
 (module+ main
   (exit (run-cli (current-command-line-arguments))))
