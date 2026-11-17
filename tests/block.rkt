@@ -45,6 +45,11 @@
                            c-proj-w
                            c-proj-b))))
 
+  (define (flvector-tensor dims n salt)
+    (make-tensor dims
+                 (flvector-by n (lambda (i)
+                                  (real->double-flonum (/ (remainder (+ i salt) 7) 10.0))))))
+
   (define (flvector-by n proc)
     (define data (make-flvector n))
     (for ([i (in-range n)])
@@ -143,4 +148,34 @@
     (check-equal? (elements (block-trace-mlp-hidden trace)) (elements hidden))
     (check-equal? (elements (block-trace-out trace)) (elements expected))
     (check-equal? (elements (gpt2-block x live)) (elements expected)))
+
+  (test-case "two blocks then ln_f match the folded pre-LN stack"
+    (define x (make-tensor '(2 2) (flvector 0.5 -1.0
+                                            1.5 0.25)))
+    (define (one salt)
+      (define d 2)
+      (define inner 8)
+      (params 1
+              (filled '(2) 1.0)
+              (make-tensor '(2) (flvector 0.1 -0.1))
+              (flvector-tensor '(2 6) 6 salt)
+              (filled '(6) 0.0)
+              (flvector-tensor '(2 2) 4 (+ salt 1))
+              (filled '(2) 0.0)
+              (filled '(2) 1.0)
+              (make-tensor '(2) (flvector -0.05 0.05))
+              (flvector-tensor '(2 8) 8 (+ salt 2))
+              (filled '(8) 0.0)
+              (flvector-tensor '(8 2) 8 (+ salt 3))
+              (filled '(2) 0.0)))
+    (define b1 (one 1))
+    (define b2 (one 4))
+    (define mid (gpt2-block (gpt2-block x b1) b2))
+    (define gain (make-tensor '(2) (flvector 1.5 0.5)))
+    (define bias (make-tensor '(2) (flvector 0.2 -0.3)))
+    (check-equal? (elements (gpt2-blocks x (list b1 b2))) (elements mid))
+    (check-equal? (elements (gpt2-ln-f mid gain bias))
+                  (elements (layer-norm mid gain bias)))
+    (check-equal? (elements (gpt2-ln-f (gpt2-blocks x (list b1 b2)) gain bias))
+                  (elements (layer-norm mid gain bias))))
   )
