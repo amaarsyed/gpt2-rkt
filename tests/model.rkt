@@ -124,6 +124,20 @@
     (check-equal? (elements (tensor-data second))
                   (elements (next-token-logits model '(1 3)))))
 
+  (test-case "interleaved requests keep their caches and earlier outputs"
+    (define model
+      (make-gpt2 #:wte (numbered 5 4) #:wpe (numbered 8 4)
+                 #:blocks (list (block 4 2 1) (block 4 4 2))
+                 #:ln-gain (filled '(4) 1.0) #:ln-bias (filled '(4) 0.0) #:eos-id 0))
+    (define-values (a ca) (model-forward model '(1) (empty-kv-cache model #:capacity 4)))
+    (define saved (elements (tensor-data a)))
+    (define-values (b cb) (model-forward model '(3) (empty-kv-cache model #:capacity 4)))
+    (define-values (a2 _ca2) (model-forward model '(2) ca))
+    (define-values (b2 _cb2) (model-forward model '(4) cb))
+    (check-equal? (elements (tensor-data a2)) (elements (next-token-logits model '(1 2))))
+    (check-equal? (elements (tensor-data b2)) (elements (next-token-logits model '(3 4))))
+    (check-equal? (elements (tensor-data a)) saved))
+
   (test-case "generation stops on token 50256"
     (define vocab 50257)
     (define data (make-flvector (* vocab 2) 0.0))
@@ -213,6 +227,20 @@
     (check-equal? (generation-token-ids
                    (model-generate model '(0) 1 #:temperature 1e-310 #:seed 1))
                   '(0)))
+
+  (test-case "top-k keeps the lower IDs on ties and excludes lower logits"
+    (for ([weights (in-list '((1.0 1.0 1.0 1.0) (4.0 3.0 2.0 1.0)))])
+      (define data (make-flvector 8 0.0))
+      (for ([w (in-list weights)] [i (in-naturals)])
+        (flvector-set! data (* 2 i) w))
+      (define model
+        (make-gpt2 #:wte (make-tensor '(4 2) data) #:wpe (filled '(64 2) 0.0)
+                   #:blocks '() #:ln-gain (filled '(2) 0.0)
+                   #:ln-bias (make-tensor '(2) (flvector 1.0 0.0)) #:eos-id 9))
+      (define ids (generation-token-ids
+                   (model-generate model '(0) 50 #:temperature 1.0 #:top-k 2 #:seed 1)))
+      (check-true (andmap (lambda (id) (or (= id 0) (= id 1))) ids)))
+    (void))
 
   (test-case "last-only logits match the last row of the full head"
     (define model
@@ -365,6 +393,34 @@
        (define model (load-model dir))
        (check-equal? (gpt2-model-n-embd model) 2)
        (check-equal? (flvector-length (next-token-logits model '(0))) 2))
+     (lambda () (delete-directory/files dir))))
+
+  (test-case "invalid config dimensions are named before arithmetic"
+    (define cfg (read-json (open-input-string base-config)))
+    (for ([key (in-list '(n_layer n_embd n_head n_positions vocab_size n_inner))]
+          [value (in-list '(-1 0 0 0 0 0))])
+      (define dir (tiny-dir base-specs base-config))
+      (dynamic-wind
+       void
+       (lambda ()
+         (write-json-file (build-path dir "config.json") (hash-set cfg key value))
+         (check-exn
+          (lambda (e)
+            (and (exn:fail:gpt2? e)
+                 (string-contains? (exn-message e) (symbol->string key))
+                 (string-contains? (exn-message e) asset-fetch-command)))
+          (lambda () (load-model dir))))
+       (lambda () (delete-directory/files dir)))))
+
+  (test-case "a model without blocks still loads"
+    (define specs (filter (lambda (spec) (not (string-prefix? (car spec) "h."))) base-specs))
+    (define cfg (hash-set (read-json (open-input-string base-config)) 'n_layer 0))
+    (define dir (tiny-dir specs base-config))
+    (dynamic-wind
+     void
+     (lambda ()
+       (write-json-file (build-path dir "config.json") cfg)
+       (check-equal? (flvector-length (next-token-logits (load-model dir) '(0))) 2))
      (lambda () (delete-directory/files dir))))
 
   (test-case "a transposed c_attn, a missing key, and an extra key are named"

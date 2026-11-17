@@ -87,7 +87,7 @@
   #:transparent)
 
 (define (gpt2-mlp-hidden x c-fc-w c-fc-b)
-  (gelu (matmul x c-fc-w c-fc-b)))
+  (matmul-gelu x c-fc-w c-fc-b))
 
 (define (gpt2-mlp x c-fc-w c-fc-b c-proj-w c-proj-b)
   (matmul (gpt2-mlp-hidden x c-fc-w c-fc-b) c-proj-w c-proj-b))
@@ -130,7 +130,7 @@
 
 ;; past-k and past-v are preallocated buffers. The new rows are written
 ;; at #:filled, and attend sees only the filled prefix.
-(define (gpt2-block-cached x params past-k past-v #:filled filled)
+(define (gpt2-block-cached x params past-k past-v #:filled filled #:workspace [workspace #f])
   (unless (block-params? params)
     (raise-argument-error 'gpt2-block-cached "block-params?" params))
   (unless (and (tensor? past-k) (tensor? past-v))
@@ -159,20 +159,20 @@
   (write-rows! past-k filled k)
   (write-rows! past-v filled v)
   (define kv-rows (+ filled nq))
-  (define heads (attend q past-k past-v (block-params-n-head params) #:kv-rows kv-rows))
-  (define attn (matmul heads
-                       (block-params-attn-proj-w params)
-                       (block-params-attn-proj-b params)))
-  (define residual1 (tensor-add x attn))
+  (define heads (attend q past-k past-v (block-params-n-head params)
+                        #:kv-rows kv-rows #:workspace workspace))
+  (define residual1 (matmul-add heads
+                                (block-params-attn-proj-w params)
+                                (block-params-attn-proj-b params)
+                                x))
   (define ln2 (layer-norm residual1
                           (block-params-ln2-gain params)
                           (block-params-ln2-bias params)))
-  (define mlp (gpt2-mlp ln2
-                        (block-params-c-fc-w params)
-                        (block-params-c-fc-b params)
-                        (block-params-mlp-proj-w params)
-                        (block-params-mlp-proj-b params)))
-  (values (tensor-add residual1 mlp) past-k past-v))
+  (define out (matmul-add (gpt2-mlp-hidden ln2 (block-params-c-fc-w params) (block-params-c-fc-b params))
+                          (block-params-mlp-proj-w params)
+                          (block-params-mlp-proj-b params)
+                          residual1))
+  (values out past-k past-v))
 
 (define (gpt2-blocks x params-list)
   (unless (list? params-list)

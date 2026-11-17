@@ -14,15 +14,74 @@
 ;; instead of copying the prefix out.
 
 (require racket/flonum
+         racket/future
+         racket/unsafe/ops
          "nn.rkt"
          "tensor.rkt")
 
 (provide qkv-split
+         make-attention-work
          attention-scale
          apply-causal-mask!
          causal-scores
          attend
          gpt2-attention)
+
+;; Scores belong to one request. Heads use disjoint portions, and each
+;; query reuses its head's row after the previous output is complete.
+(struct attention-work (heads capacity scores) #:transparent)
+
+(define (make-attention-work heads capacity)
+  (unless (and (exact-positive-integer? heads) (exact-positive-integer? capacity))
+    (raise-arguments-error 'make-attention-work "heads and capacity must be positive"
+                           "heads" heads "capacity" capacity))
+  (attention-work heads capacity (make-flvector (* heads capacity) 0.0)))
+
+(define (fill-head! out q k v scores h nq nk stride dh capacity scale)
+  (define col (unsafe-fx* h dh))
+  (define score-base (unsafe-fx* h capacity))
+  (let loop-i ([i 0])
+    (unless (unsafe-fx= i nq)
+      (define qbase (unsafe-fx+ (unsafe-fx* i stride) col))
+      (define visible (unsafe-fx+ (unsafe-fx- nk nq) (unsafe-fx+ i 1)))
+      (define maxv
+        (let loop-j ([j 0] [maxv -inf.0])
+          (if (unsafe-fx= j visible)
+              maxv
+              (let* ([kbase (unsafe-fx+ (unsafe-fx* j stride) col)]
+                     [dot (let loop-d ([d 0] [sum 0.0])
+                            (if (unsafe-fx= d dh) sum
+                                (loop-d (unsafe-fx+ d 1)
+                                        (unsafe-fl+ sum
+                                                    (unsafe-fl* (unsafe-flvector-ref q (unsafe-fx+ qbase d))
+                                                                (unsafe-flvector-ref k (unsafe-fx+ kbase d)))))))]
+                     [score (unsafe-fl* dot scale)])
+                (unsafe-flvector-set! scores (unsafe-fx+ score-base j) score)
+                (loop-j (unsafe-fx+ j 1) (flmax maxv score))))))
+      (define total
+        (let loop-j ([j 0] [sum 0.0])
+          (if (unsafe-fx= j visible) sum
+              (let* ([idx (unsafe-fx+ score-base j)]
+                     [score (unsafe-flvector-ref scores idx)]
+                     [weight (cond [(fl= maxv -inf.0) 0.0]
+                                   [(fl= maxv +inf.0) (if (fl= score +inf.0) 1.0 0.0)]
+                                   [else (flexp (unsafe-fl- score maxv))])])
+                (unsafe-flvector-set! scores idx weight)
+                (loop-j (unsafe-fx+ j 1) (unsafe-fl+ sum weight))))))
+      (unless (fl= total 0.0)
+        (let loop-j ([j 0])
+          (unless (unsafe-fx= j visible)
+            (define weight (unsafe-fl/ (unsafe-flvector-ref scores (unsafe-fx+ score-base j)) total))
+            (define vbase (unsafe-fx+ (unsafe-fx* j stride) col))
+            (let loop-d ([d 0])
+              (unless (unsafe-fx= d dh)
+                (define idx (unsafe-fx+ qbase d))
+                (unsafe-flvector-set! out idx
+                                      (unsafe-fl+ (unsafe-flvector-ref out idx)
+                                                  (unsafe-fl* weight (unsafe-flvector-ref v (unsafe-fx+ vbase d)))))
+                (loop-d (unsafe-fx+ d 1))))
+            (loop-j (unsafe-fx+ j 1)))))
+      (loop-i (unsafe-fx+ i 1)))))
 
 (define (attention-scale d-head)
   (unless (exact-positive-integer? d-head)
@@ -65,7 +124,7 @@
                            "k rows" nk))
   (apply-causal-mask! (matmul-transposed-b q k) scale))
 
-(define (attend q k v n-head #:kv-rows [kv-rows #f])
+(define (attend q k v n-head #:kv-rows [kv-rows #f] #:workspace [workspace #f])
   (unless (exact-positive-integer? n-head)
     (raise-argument-error 'attend "exact-positive-integer?" n-head))
   (define-values (nq d) (matrix-shape 'attend q))
@@ -100,14 +159,22 @@
                            "heads" n-head))
   (define dh (quotient d n-head))
   (define scale (attention-scale dh))
-  (define bias (make-tensor (list dh) (make-flvector dh 0.0)))
+  (define work (or workspace (make-attention-work n-head used)))
+  (unless (and (attention-work? work)
+               (>= (attention-work-heads work) n-head)
+               (>= (attention-work-capacity work) used))
+    (raise-arguments-error 'attend "workspace does not fit the heads and filled prefix"
+                           "heads" n-head "rows" used))
   (define merged (make-tensor (list nq d) (make-flvector (* nq d) 0.0)))
-  (for ([h (in-range n-head)])
-    (define start (* h dh))
-    (define qh (slice-cols q start (+ start dh)))
-    (define scores (matmul-transposed-block qh k used start))
-    (define probs (softmax (apply-causal-mask! scores scale)))
-    (paste-cols! merged d (matmul-column-block probs v bias start dh) start))
+  (define (head h)
+    (fill-head! (tensor-data merged) (tensor-data q) (tensor-data k) (tensor-data v)
+                (attention-work-scores work) h nq used d dh (attention-work-capacity work) scale))
+  ;; A decode query stays serial. Prefill gives each head its own future.
+  (cond
+    [(and (> (processor-count) 1) (> (* nq used dh) 100000))
+     (define jobs (for/list ([h (in-range n-head)]) (future (lambda () (head h)))))
+     (for ([job (in-list jobs)]) (touch job))]
+    [else (for ([h (in-range n-head)]) (head h))])
   merged)
 
 (define (gpt2-attention x c-attn-w c-attn-b c-proj-w c-proj-b n-head)
