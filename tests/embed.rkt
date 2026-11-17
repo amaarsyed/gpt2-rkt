@@ -45,10 +45,25 @@
     (define rows (make-flvector 1024))
     (for ([i (in-range 1024)])
       (flvector-set! rows i (exact->inexact i)))
-    (define full (position-embed (make-tensor '(1024 1) rows) 1024))
+    (define table (make-tensor '(1024 1) rows))
+    (define full (position-embed table 1024))
     (check-equal? (tensor-dims full) '(1024 1))
     (check-equal? (tensor-ref full 0 0) 0.0)
-    (check-equal? (tensor-ref full 1023 0) 1023.0))
+    (check-equal? (tensor-ref full 1023 0) 1023.0)
+    (check-equal? (elements (position-embed table 1 #:start 1023)) '(1023.0))
+    (check-exn #rx"1024"
+               (lambda () (position-embed table 1 #:start 1024)))
+    (check-exn #rx"1024"
+               (lambda () (position-embed table 2 #:start 1023))))
+
+  (test-case "position embed reads rows from a start offset"
+    (define y (position-embed wpe 2 #:start 1))
+    (check-equal? (tensor-dims y) '(2 2))
+    (check-equal? (elements y) '(0.0 0.5 1.0 1.0))
+    (check-equal? (elements (input-embed wte wpe '(2) #:start 1))
+                  '(5.0 6.5))
+    (check-exn exn:fail:contract?
+               (lambda () (position-embed wpe 1 #:start -1))))
 
   (test-case "input embed adds token and position rows"
     (define y (input-embed wte wpe '(1 2)))
