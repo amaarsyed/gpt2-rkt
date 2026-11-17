@@ -37,12 +37,13 @@
                            "heads" heads "capacity" capacity))
   (attention-work heads capacity (make-flvector (* heads capacity) 0.0)))
 
-(define (fill-head! out q k v scores h nq nk stride dh capacity scale)
+(define (fill-head! out q k v scores h nq nk q-stride stride dh capacity scale)
   (define col (unsafe-fx* h dh))
   (define score-base (unsafe-fx* h capacity))
   (let loop-i ([i 0])
     (unless (unsafe-fx= i nq)
-      (define qbase (unsafe-fx+ (unsafe-fx* i stride) col))
+      (define qbase (unsafe-fx+ (unsafe-fx* i q-stride) col))
+      (define outbase (unsafe-fx+ (unsafe-fx* i stride) col))
       (define visible (unsafe-fx+ (unsafe-fx- nk nq) (unsafe-fx+ i 1)))
       (define maxv
         (let loop-j ([j 0] [maxv -inf.0])
@@ -75,7 +76,7 @@
             (define vbase (unsafe-fx+ (unsafe-fx* j stride) col))
             (let loop-d ([d 0])
               (unless (unsafe-fx= d dh)
-                (define idx (unsafe-fx+ qbase d))
+                (define idx (unsafe-fx+ outbase d))
                 (unsafe-flvector-set! out idx
                                       (unsafe-fl+ (unsafe-flvector-ref out idx)
                                                   (unsafe-fl* weight (unsafe-flvector-ref v (unsafe-fx+ vbase d)))))
@@ -124,10 +125,14 @@
                            "k rows" nk))
   (apply-causal-mask! (matmul-transposed-b q k) scale))
 
-(define (attend q k v n-head #:kv-rows [kv-rows #f] #:workspace [workspace #f])
+(define (attend q k v n-head #:kv-rows [kv-rows #f] #:workspace [workspace #f]
+                #:query-width [query-width #f])
   (unless (exact-positive-integer? n-head)
     (raise-argument-error 'attend "exact-positive-integer?" n-head))
-  (define-values (nq d) (matrix-shape 'attend q))
+  (define-values (nq q-stride) (matrix-shape 'attend q))
+  (define d (or query-width q-stride))
+  (unless (and (exact-positive-integer? d) (<= d q-stride))
+    (raise-argument-error 'attend "query width within the stored row" d))
   (define-values (nk dk) (matrix-shape 'attend k))
   (define-values (nv dv) (matrix-shape 'attend v))
   (unless (and (= d dk) (= d dv))
@@ -168,7 +173,7 @@
   (define merged (make-tensor (list nq d) (make-flvector (* nq d) 0.0)))
   (define (head h)
     (fill-head! (tensor-data merged) (tensor-data q) (tensor-data k) (tensor-data v)
-                (attention-work-scores work) h nq used d dh (attention-work-capacity work) scale))
+                (attention-work-scores work) h nq used q-stride d dh (attention-work-capacity work) scale))
   ;; A decode query stays serial. Prefill gives each head its own future.
   (cond
     [(and (> (processor-count) 1) (> (* nq used dh) 100000))

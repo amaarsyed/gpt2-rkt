@@ -177,6 +177,14 @@
       (define work (make-attention-work 2 (+ used 3)))
       (define got (attend q k v 2 #:kv-rows used #:workspace work))
       (define saved (elements got))
+      (define packed (make-tensor (list nq 48) (make-flvector (* nq 48) 999.0)))
+      (for* ([i (in-range nq)] [j (in-range 16)])
+        (flvector-set! (tensor-data packed) (+ (* i 48) j) (tensor-ref q i j)))
+      (check-true (within-tolerance?
+                   (elements (attend packed k v 2 #:kv-rows used #:workspace work #:query-width 16))
+                   saved #:abs 1e-12 #:rel 0.0))
+      (check-exn exn:fail:contract?
+                 (lambda () (attend packed k v 2 #:query-width 49)))
       (define gap (max-abs-error saved (elements expected)))
       (check-true (< gap 1e-12) (format "dense attention gap: ~a" gap))
       (attend q k v 2 #:kv-rows used #:workspace work)
