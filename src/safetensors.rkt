@@ -8,10 +8,12 @@
 (require json
          racket/flonum
          racket/port
+         racket/unsafe/ops
          "errors.rkt"
          "tensor.rkt")
 
-(provide read-safetensors)
+(provide read-safetensors
+         safetensors-entry-name)
 
 (define (read-exact-integer n)
   (cond
@@ -25,16 +27,24 @@
     (raise-gpt2 (format "safetensors F32 data length is not a multiple of 4: ~a" nbytes)))
   (define n (quotient nbytes 4))
   (define out (make-flvector n))
+  ;; The byte range is checked above, so the unsafe stores stay in range.
   (for ([i (in-range n)])
-    (define base (* i 4))
-    (flvector-set! out i
-                   (real->double-flonum
-                    (floating-point-bytes->real raw #f base (+ base 4)))))
+    (define base (unsafe-fx* i 4))
+    (unsafe-flvector-set! out i (floating-point-bytes->real raw #f base (unsafe-fx+ base 4))))
   out)
 
-(define (read-safetensors path)
+(define (safetensors-entry-name key)
+  (if (symbol? key) (symbol->string key) key))
+
+;; `#:skip` drops a tensor before its bytes are decoded. The GPT-2
+;; loader uses it for the `attn.bias` mask buffers. A header need not
+;; be a multiple of 8: the official file's length is 14283, so the
+;; float payload is not 4-byte aligned, and `read-json` still accepts
+;; a header padded with spaces.
+(define (read-safetensors path #:skip [skip (lambda (name) #f)])
   (define bs
-    (with-handlers ([exn:fail? (lambda (e)
+    (with-handlers ([exn:fail:gpt2? (lambda (e) (raise e))]
+                    [exn:fail? (lambda (e)
                                  (raise-gpt2 (format "could not read ~a: ~a" path (exn-message e))))])
       (call-with-input-file path port->bytes #:mode 'binary)))
   (when (< (bytes-length bs) 8)
@@ -44,31 +54,34 @@
   (when (or (< header-len 2) (> header-end (bytes-length bs)))
     (raise-gpt2 (format "safetensors header length is out of range: ~a" path)))
   (define header
-    (with-handlers ([exn:fail? (lambda (e)
+    (with-handlers ([exn:fail:gpt2? (lambda (e) (raise e))]
+                    [exn:fail? (lambda (e)
                                  (raise-gpt2 (format "safetensors header is not JSON: ~a" (exn-message e))))])
       (read-json (open-input-bytes (subbytes bs 8 header-end)))))
   (unless (hash? header)
-    (raise-gpt2 "safetensors header is not an object"))
+    (raise-gpt2 (format "safetensors header is not an object: ~a" path)))
   (define data-base header-end)
-  (for/hash ([(key info) (in-hash header)]
-             #:unless (equal? (format "~a" key) "__metadata__"))
-    (unless (hash? info)
-      (raise-gpt2 (format "safetensors entry is not an object: ~a" key)))
-    (define dtype (hash-ref info 'dtype #f))
-    (unless (equal? dtype "F32")
-      (raise-gpt2 (format "safetensors dtype ~a is not supported" dtype)))
-    (define shape (hash-ref info 'shape #f))
-    (define offsets (hash-ref info 'data_offsets #f))
-    (unless (and (list? shape) (andmap read-exact-integer shape))
-      (raise-gpt2 (format "safetensors shape is invalid: ~a" key)))
-    (unless (and (list? offsets) (= (length offsets) 2))
-      (raise-gpt2 (format "safetensors offsets are invalid: ~a" key)))
-    (define start (read-exact-integer (car offsets)))
-    (define end (read-exact-integer (cadr offsets)))
-    (unless (and start end (<= 0 start end) (<= (+ data-base end) (bytes-length bs)))
-      (raise-gpt2 (format "safetensors offsets are out of range: ~a" key)))
-    (define dims (map read-exact-integer shape))
-    (define raw (subbytes bs (+ data-base start) (+ data-base end)))
-    (define nums (f32-flvector raw))
-    (define name (if (symbol? key) (symbol->string key) key))
-    (values name (make-tensor dims nums))))
+  (for/fold ([table (hash)])
+            ([(key info) (in-hash header)])
+    (define name (safetensors-entry-name key))
+    (cond
+      [(or (equal? name "__metadata__") (skip name)) table]
+      [else
+       (unless (hash? info)
+         (raise-gpt2 (format "safetensors entry is not an object: ~a" name)))
+       (define dtype (hash-ref info 'dtype #f))
+       (unless (equal? dtype "F32")
+         (raise-gpt2 (format "safetensors dtype ~a is not F32: ~a" dtype name)))
+       (define shape (hash-ref info 'shape #f))
+       (define offsets (hash-ref info 'data_offsets #f))
+       (unless (and (list? shape) (andmap read-exact-integer shape))
+         (raise-gpt2 (format "safetensors shape is invalid: ~a" name)))
+       (unless (and (list? offsets) (= (length offsets) 2))
+         (raise-gpt2 (format "safetensors offsets are invalid: ~a" name)))
+       (define start (read-exact-integer (car offsets)))
+       (define end (read-exact-integer (cadr offsets)))
+       (unless (and start end (<= 0 start end) (<= (+ data-base end) (bytes-length bs)))
+         (raise-gpt2 (format "safetensors offsets are out of range: ~a" name)))
+       (define dims (map read-exact-integer shape))
+       (define raw (subbytes bs (+ data-base start) (+ data-base end)))
+       (hash-set table name (make-tensor dims (f32-flvector raw)))])))
