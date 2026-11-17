@@ -105,6 +105,15 @@
                (lambda ()
                  (softmax (make-tensor '(2 0) (flvector))))))
 
+  (test-case "softmax stays finite when a row contains +inf"
+    (check-equal? (elements (softmax (make-tensor '(3) (flvector +inf.0 1.0 -inf.0))))
+                  '(1.0 0.0 0.0))
+    (check-equal? (elements (softmax (make-tensor '(2) (flvector +inf.0 +inf.0))))
+                  '(0.5 0.5))
+    (define mixed (softmax (make-tensor '(2 2) (flvector +inf.0 0.0
+                                                        0.0 0.0))))
+    (check-equal? (elements mixed) '(1.0 0.0 0.5 0.5)))
+
   (test-case "layer-norm uses biased variance and eps 1e-5"
     (check-equal? layernorm-eps 1e-5)
     (define y (layer-norm (make-tensor '(3) (flvector 1.0 2.0 3.0))
