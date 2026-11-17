@@ -181,14 +181,9 @@
 
 (define (last-row logits)
   (define dims (tensor-dims logits))
-  (define rows (car dims))
   (define cols (cadr dims))
-  (define src (tensor-data logits))
-  (define out (make-flvector cols))
-  (define base (* (sub1 rows) cols))
-  (for ([j (in-range cols)])
-    (flvector-set! out j (flvector-ref src (+ base j))))
-  out)
+  (define base (* (sub1 (car dims)) cols))
+  (flvector-copy (tensor-data logits) base (+ base cols)))
 
 (define (next-token-logits model ids)
   (when (null? ids)
@@ -261,7 +256,8 @@
                         #:temperature [temperature #f]
                         #:top-k [top-k #f]
                         #:seed [seed #f]
-                        #:output-port [out #f])
+                        #:output-port [out #f]
+                        #:stop-at-eos? [stop-at-eos? #t])
   (unless (exact-positive-integer? max-new)
     (raise-gpt2 "max-new-tokens must be an integer >= 1"))
   (when (null? ids)
@@ -304,7 +300,7 @@
   (emit-id first)
   (define new
     (let loop ([cache cache] [chosen first] [acc (list first)] [left (sub1 max-new)])
-      (if (or (zero? left) (= chosen eos))
+      (if (or (zero? left) (and stop-at-eos? (= chosen eos)))
           (reverse acc)
             (let-values ([(logits cache)
                           (model-forward model (list chosen) cache #:last-only #t)])
