@@ -8,6 +8,9 @@ Defects found while building gpt2-rkt. Add one row per bug.
 | A value beginning with `--` was rejected as a missing flag value | `take-option` refused the next argument when it matched `^--` | The next argument is the value, including text that starts with `-` | `95b5ea2` | `tests/cli.rkt`: "help flags in value position are values" |
 | A softmax row that contains `+inf.0` is all NaN | The max-subtract step computes `+inf.0 - +inf.0`, which is NaN, and `exp` of that stays NaN | Positions equal to `+inf.0` share the row equally and every other position is 0 | `6e4b4a5` | `tests/nn.rkt`: "softmax stays finite when a row contains +inf" |
 | `"  a"` was split as two spaces and then `a`, so the leading space was not part of the next word | The trailing-whitespace alternative used `(?!\s)` ("not followed by whitespace") instead of `(?!\S)` ("not followed by a non-whitespace") | The alternative is `whitespace+(?![^whitespace])`, which backtracks until the next character is whitespace or the end | `a6af301` | `tests/pretokenize.rkt`: "trailing and repeated spaces split like GPT-2" |
+| `src/embed.rkt` did not compile: `flvector-set!` was unbound | `racket/base` does not provide the flvector operations | Require `racket/flonum` | `f296560` | `tests/embed.rkt` |
+| The reference-id test did not compile: `system*` and `file->bytes` were unbound | `system*` is in `racket/system` and `file->bytes` is in `racket/file` | Require both modules | `21be015` | `tests/tokenizer-cases.rkt` |
+| The source guard would have failed on the pre-tokenizer comment | The comment named the reference language | Describe the whitespace class without that name | `3199901` | CI grep over `*.rkt` files |
 
 ## Anticipated risks verified
 
