@@ -45,6 +45,12 @@
                            c-proj-w
                            c-proj-b))))
 
+  (define (flvector-by n proc)
+    (define data (make-flvector n))
+    (for ([i (in-range n)])
+      (flvector-set! data i (proc i)))
+    data)
+
   (define (filled dims value)
     (define n (apply * dims))
     (make-tensor dims (make-flvector n value)))
@@ -115,10 +121,10 @@
                                                       0.0 -0.1 0.0 0.2)))
     (define attn-proj-b (filled '(4) 0.0))
     (define fc-w (make-tensor '(4 16)
-                              (build-flvector 64 (lambda (i) (real->double-flonum (/ (remainder i 5) 20.0))))))
+                              (flvector-by 64 (lambda (i) (real->double-flonum (/ (remainder i 5) 20.0))))))
     (define fc-b (filled '(16) 0.0))
     (define mlp-w (make-tensor '(16 4)
-                               (build-flvector 64 (lambda (i) (real->double-flonum (/ (remainder i 3) 25.0))))))
+                               (flvector-by 64 (lambda (i) (real->double-flonum (/ (remainder i 3) 25.0))))))
     (define mlp-b (filled '(4) 0.0))
     (define live (params 2 gain bias attn-w attn-b attn-proj-w attn-proj-b
                          gain bias fc-w fc-b mlp-w mlp-b))
