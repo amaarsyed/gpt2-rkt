@@ -19,8 +19,11 @@
          slice-cols
          split-last
          tensor-reshape
+         tensor-row-groups
          flvector-dot
-         dims->string)
+         dims->string
+         matrix-shape
+         paste-cols!)
 
 (struct tensor (dims data)
   #:constructor-name raw-tensor
@@ -60,11 +63,25 @@
   (unless (tensor? t)
     (raise-argument-error who "tensor?" t)))
 
+(define (matrix-shape who t)
+  (check-tensor who t)
+  (define dims (tensor-dims t))
+  (unless (= (length dims) 2)
+    (raise-arguments-error who
+                           "expected a rank-2 tensor"
+                           "dims" (dims->string dims)))
+  (values (car dims) (cadr dims)))
+
 (define (last-dim dims)
   (let loop ([dims dims])
     (if (null? (cdr dims))
         (car dims)
         (loop (cdr dims)))))
+
+(define (tensor-row-groups dims)
+  (define width (last-dim dims))
+  (define total (dim-product dims))
+  (values width (if (zero? width) 0 (quotient total width))))
 
 (define (butlast dims)
   (if (null? (cdr dims))
@@ -154,14 +171,10 @@
   (define cols (cadr dims))
   (check-slice 'slice-rows start end rows)
   (define n (- end start))
-  (define out (make-flvector (* n cols)))
   (define src (tensor-data t))
   (define base (* start cols))
   (define count (* n cols))
-  (let loop ([i 0])
-    (unless (fx= i count)
-      (flvector-set! out i (flvector-ref src (fx+ base i)))
-      (loop (fx+ i 1))))
+  (define out (flvector-copy src base (+ base count)))
   (raw-tensor (list n cols) out))
 
 (define (slice-cols t start end)
@@ -186,6 +199,18 @@
           (loop-j (fx+ j 1))))
       (loop-i (fx+ i 1))))
   (raw-tensor (list rows width) out))
+
+;; Inverse of slice-cols: copy src's columns into dest starting at col0.
+(define (paste-cols! dest dest-cols src col0)
+  (define rows (car (tensor-dims src)))
+  (define width (cadr (tensor-dims src)))
+  (define from (tensor-data src))
+  (define to (tensor-data dest))
+  (for ([i (in-range rows)])
+    (define src-base (* i width))
+    (define dest-base (+ (* i dest-cols) col0))
+    (for ([j (in-range width)])
+      (flvector-set! to (+ dest-base j) (flvector-ref from (+ src-base j))))))
 
 (define (split-last t parts)
   (check-tensor 'split-last t)

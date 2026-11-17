@@ -2,7 +2,8 @@
 
 ;; CLI entry and public API. Implementation lives under src/.
 
-(require "src/bpe-bytes.rkt"
+(require "src/attention.rkt"
+         "src/bpe-bytes.rkt"
          "src/cli.rkt"
          "src/embed.rkt"
          "src/errors.rkt"
@@ -58,7 +59,12 @@
          gpt2-context-length
          token-embed
          position-embed
-         input-embed)
+         input-embed
+         qkv-split
+         attention-scale
+         causal-scores
+         attend
+         gpt2-attention)
 
 (module+ main
   (exit (run-cli (current-command-line-arguments))))

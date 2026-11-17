@@ -68,6 +68,46 @@
                (lambda ()
                  (matmul-transposed-b (make-tensor '(1 2) (flvector 1.0 2.0)) W))))
 
+  (define (naive-matmul n in out x W b)
+    (for/list ([i (in-range n)])
+      (for/list ([j (in-range out)])
+        (for/fold ([acc (flvector-ref b j)]) ([k (in-range in)])
+          (fl+ acc (fl* (flvector-ref x (+ (* i in) k))
+                        (flvector-ref W (+ (* k out) j))))))))
+
+  (define (naive-transposed n in out h W)
+    (for/list ([i (in-range n)])
+      (for/list ([j (in-range out)])
+        (for/fold ([acc 0.0]) ([k (in-range in)])
+          (fl+ acc (fl* (flvector-ref h (+ (* i in) k))
+                        (flvector-ref W (+ (* j in) k))))))))
+
+  (test-case "a prime output width matches a naive loop"
+    ;; 1031 is prime, so a column split wider than 4 still has a ×4 tail.
+    ;; W[k, j] depends on both indexes, which a constant row would hide.
+    (define out 1031)
+    (define in 128)
+    (define (fill-w rows cols proc)
+      (define data (make-flvector (* rows cols)))
+      (for ([r (in-range rows)])
+        (for ([c (in-range cols)])
+          (flvector-set! data (+ (* r cols) c) (proc r c))))
+      data)
+    (for ([n (in-list '(1 3))])
+      (define x (fill-w n in (lambda (i k) (exact->inexact (remainder (+ (* i 3) k) 5)))))
+      (define W (fill-w in out (lambda (k j) (exact->inexact (remainder (+ (* k 17) j) 9)))))
+      (define b (make-flvector out))
+      (for ([j (in-range out)])
+        (flvector-set! b j (exact->inexact (remainder j 4))))
+      (define y (matmul (make-tensor (list n in) x)
+                        (make-tensor (list in out) W)
+                        (make-tensor (list out) b)))
+      (check-equal? (elements y) (apply append (naive-matmul n in out x W b)))
+      (define tied (fill-w out in (lambda (j k) (exact->inexact (remainder (+ (* j 5) (* k 3)) 7)))))
+      (define logits (matmul-transposed-b (make-tensor (list n in) x)
+                                          (make-tensor (list out in) tied)))
+      (check-equal? (elements logits) (apply append (naive-transposed n in out x tied)))))
+
   (test-case "parallel matmul matches the integer formula"
     (define dim 64)
     (define x-data (make-flvector (* dim dim)))
