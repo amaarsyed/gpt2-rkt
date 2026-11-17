@@ -3,6 +3,7 @@
 (module+ test
   (require rackunit
            racket/flonum
+           racket/list
            "../src/nn.rkt"
            "../src/tensor.rkt")
 
