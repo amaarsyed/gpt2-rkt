@@ -176,6 +176,21 @@
                (lambda ()
                  (model-generate model '(0) 1 #:temperature 0.5 #:top-k 5 #:seed 1))))
 
+  (test-case "a tiny temperature keeps the largest negative logit"
+    (define model
+      (make-gpt2 #:wte (make-tensor '(4 2) (flvector 0.5 0.0
+                                                     1.0 0.0
+                                                     2.0 0.0
+                                                     3.0 0.0))
+                 #:wpe (filled '(4 2) 0.0)
+                 #:blocks (list (zero-block 2))
+                 #:ln-gain (filled '(2) 0.0)
+                 #:ln-bias (make-tensor '(2) (flvector -1.0 0.0))
+                 #:eos-id 2))
+    (check-equal? (generation-token-ids
+                   (model-generate model '(0) 1 #:temperature 1e-310 #:seed 1))
+                  '(0)))
+
   (test-case "generation uses the model's position count"
     (define model
       (make-gpt2 #:wte (filled '(2 2) 0.0)
