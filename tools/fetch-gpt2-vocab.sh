@@ -1,24 +1,44 @@
 #!/bin/sh
 # Download the GPT-2 BPE files used by the tests.
 # Pinned to openai-community/gpt2 at 607a30d783dfa663caf39e06633721c8d4cfcd7e.
-# Weights are not downloaded.
+# Digests live in tools/gpt2-assets.sha256. Weights are not downloaded.
 
 set -eu
 
 root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 dest="$root/models/gpt2"
+assets="$root/tools/gpt2-assets.sha256"
 mkdir -p "$dest"
 
-vocab_hash=196139668be63f3b5d6574427317ae82f612a97c5d1cdaf36ed2256dbf636783
-merges_hash=1ce1664773c50f3e0cc8842619a93edc4624525b728b188a9e0be33b7726adc5
 base=https://huggingface.co/openai-community/gpt2/resolve/607a30d783dfa663caf39e06633721c8d4cfcd7e
+
+file_sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  else
+    echo "sha256sum or shasum is required" >&2
+    exit 1
+  fi
+}
+
+expected_sha256() {
+  name=$1
+  hash=$(awk -v name="$name" '$2 == name { print $1; exit }' "$assets")
+  if [ -z "$hash" ]; then
+    echo "no digest for $name in $assets" >&2
+    exit 1
+  fi
+  printf '%s\n' "$hash"
+}
 
 fetch() {
   name=$1
-  hash=$2
+  hash=$(expected_sha256 "$name")
   path="$dest/$name"
   if [ -f "$path" ]; then
-    got=$(sha256sum "$path" | awk '{print $1}')
+    got=$(file_sha256 "$path")
     if [ "$got" = "$hash" ]; then
       return 0
     fi
@@ -26,7 +46,7 @@ fetch() {
   fi
   tmp=$(mktemp)
   curl -fsSL -A "gpt2-rkt" -o "$tmp" "$base/$name"
-  got=$(sha256sum "$tmp" | awk '{print $1}')
+  got=$(file_sha256 "$tmp")
   if [ "$got" != "$hash" ]; then
     echo "sha256 mismatch for $name" >&2
     echo "expected $hash" >&2
@@ -37,6 +57,6 @@ fetch() {
   mv "$tmp" "$path"
 }
 
-fetch vocab.json "$vocab_hash"
-fetch merges.txt "$merges_hash"
+fetch vocab.json
+fetch merges.txt
 echo "cached vocab.json and merges.txt in $dest"
