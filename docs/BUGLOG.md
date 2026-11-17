@@ -18,6 +18,7 @@ Defects found while building gpt2-rkt. Add one row per bug.
 | The attention fixture script could not import `GPT2Attention` | transformers 4.46.3 does not export that class from the package root | Import it from `transformers.models.gpt2.modeling_gpt2` | `8683756` | `tools/fixtures/emit_attention_cases.py` |
 | The block test did not compile: `build-flvector` was unbound | `racket/flonum` has no `build-flvector` | Fill the vector with `make-flvector` and `flvector-set!` | `93a8e9f` | `tests/block.rkt` |
 | The two-block test raised a shape error on `c_attn` | The generated weight length was the last dimension, not the product of the dimensions | Count elements with the product of the shape | `2da0ac6` | `tests/block.rkt`: "two blocks then ln_f match the folded pre-LN stack" |
+| The safetensors round-trip raised "not a procedure" and showed the decoded floats | The data vector was named `values`, which shadowed the procedure used to return the hash entry | Name the vector `nums` | `4475dda` | `tests/safetensors.rkt`: "F32 tensors round-trip through the header" |
 
 ## Anticipated risks verified
 
