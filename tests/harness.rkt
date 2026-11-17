@@ -57,7 +57,8 @@
     (check-regexp-match #px"steady-tokens-per-sec: " text)
     (check-regexp-match #px"peak-bytes: " text)
     (check-true (string-contains? text "placeholder kernel"))
-    (check-true (string-contains? text "current-memory-use 'peak")))
+    (check-true (string-contains? text "current-memory-use 'peak"))
+    (check-true (string-contains? text "later prompt length")))
 
   (test-case "matmul benchmark times the square kernel"
     (define sample (run-matmul-benchmark #:dim 8))
@@ -72,7 +73,9 @@
     (check-regexp-match #px"matmul-gflops: " text)
     (check-regexp-match #px"matmul-allocated-bytes: " text)
     (check-regexp-match #px"matmul-gc-delta: " text)
-    (check-regexp-match #px"matmul-stats-slot-11: " text)
+    (check-regexp-match #px"matmul-peak-before-gc-bytes: " text)
+    (check-regexp-match #px"median of 5" text)
+    (check-regexp-match #px"machine: os=" text)
     (define-values (x W b)
       (let ([data (make-flvector 64 1.0)])
         (values (make-tensor '(8 8) data)

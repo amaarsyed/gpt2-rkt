@@ -1,6 +1,6 @@
 # gpt2-rkt
 
-Pure-Racket inference for GPT-2 Small (124M). Numeric work uses `flvector` and `racket/flonum`. On more than one processor, a matrix multiply of 32 or more rows runs one future per processor, and each future writes its own rows. Model weights are not in git.
+Pure-Racket inference for GPT-2 Small (124M). Numeric work uses `flvector` and `racket/flonum`. On more than one processor, a matrix multiply of 32 or more rows is split across rows. A shorter multiply with 32 or more columns, including a single-token logits multiply, is split across output columns. Each split uses four times as many blocks as `processor-count`. Model weights are not in git.
 
 This is the 0.1.0 line. `generate` parses a request and checks the model directory. Weight loading is not implemented yet, so a missing directory is a missing-assets error, and a directory that already has the expected files stops with "model loading is not implemented".
 
@@ -43,7 +43,7 @@ racket main.rkt generate \
   --seed 1
 ```
 
-Benchmark harness. This prints the Racket version and VM, then two reports. The prompt report is still a placeholder `flvector` dot product: load time, first-token latency, steady-state tokens per second, and `(current-memory-use 'peak)` for a short prompt length (16) and a longer one (128). The matmul report times one 768×768 Conv1D multiply and prints milliseconds, GFLOP/s, bytes allocated, and `vector-set-performance-stats!` counters:
+Benchmark harness. This prints the Racket version, VM, and machine, then the reports. The prompt report is still a placeholder `flvector` dot product: load time, first-token latency, steady-state tokens per second, and `(current-memory-use 'peak)` for a short prompt length (16) and a longer one (128). Each length runs in its own process, because `'peak` is a process-lifetime high-water mark. The matmul report warms up, then prints the median of five runs for a 768×768 Conv1D multiply and for a 1×768 · 768×50257 logits multiply: milliseconds, GFLOP/s, bytes allocated, and `vector-set-performance-stats!` counters:
 
 ```sh
 racket bench/harness.rkt
