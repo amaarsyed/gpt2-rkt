@@ -58,6 +58,10 @@
 
 (struct kv-cache (layers position) #:transparent)
 
+;; One preallocated key/value buffer per layer. filled is the number of
+;; rows written. The next step updates these buffers in place.
+(struct layer-cache (k v filled) #:transparent)
+
 (struct generation (token-ids text) #:transparent)
 
 (define (make-gpt2 #:wte wte
@@ -79,7 +83,14 @@
             wte wpe blocks ln-gain ln-bias tokenizer))
 
 (define (empty-kv-cache model)
-  (kv-cache (make-list (length (gpt2-model-blocks model)) #f) 0))
+  (define n (gpt2-model-n-positions model))
+  (define d (gpt2-model-n-embd model))
+  (kv-cache
+   (for/list ([_ (in-list (gpt2-model-blocks model))])
+     (layer-cache (make-tensor (list n d) (make-flvector (* n d) 0.0))
+                  (make-tensor (list n d) (make-flvector (* n d) 0.0))
+                  0))
+   0))
 
 (define (context-limit model)
   (min gpt2-context-length (gpt2-model-n-positions model)))
@@ -135,8 +146,12 @@
               ([params (in-list (gpt2-model-blocks model))]
                [past (in-list (kv-cache-layers cache))])
       (define-values (out k v)
-        (gpt2-block-cached hidden params (and past (car past)) (and past (cdr past))))
-      (values out (cons (cons k v) acc))))
+        (gpt2-block-cached hidden
+                           params
+                           (layer-cache-k past)
+                           (layer-cache-v past)
+                           #:filled (layer-cache-filled past)))
+      (values out (cons (layer-cache k v (+ (layer-cache-filled past) n)) acc))))
   (define hidden (layer-norm y (gpt2-model-ln-gain model) (gpt2-model-ln-bias model)))
   (define scored
     (if last-only

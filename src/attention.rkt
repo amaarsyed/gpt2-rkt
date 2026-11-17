@@ -60,7 +60,7 @@
                          (fl* scale (flvector-ref src idx))))))
   (make-tensor (list nq nk) out))
 
-(define (attend q k v n-head)
+(define (attend q k v n-head #:kv-rows [kv-rows #f])
   (unless (exact-positive-integer? n-head)
     (raise-argument-error 'attend "exact-positive-integer?" n-head))
   (define-values (nq d) (matrix-shape 'attend q))
@@ -77,11 +77,17 @@
                            "k and v row counts differ"
                            "k rows" nk
                            "v rows" nv))
-  (when (> nq nk)
+  (define used (or kv-rows nk))
+  (unless (and (exact-positive-integer? used) (<= used nk))
+    (raise-arguments-error 'attend
+                           "kv row count is outside the cache"
+                           "rows" used
+                           "k rows" nk))
+  (when (> nq used)
     (raise-arguments-error 'attend
                            "q is longer than k"
                            "q rows" nq
-                           "k rows" nk))
+                           "k rows" used))
   (unless (zero? (remainder d n-head))
     (raise-arguments-error 'attend
                            "width is not divisible by the head count"
@@ -95,8 +101,8 @@
     (define start (* h dh))
     (define end (+ start dh))
     (define qh (slice-cols q start end))
-    (define kh (slice-cols k start end))
-    (define vh (slice-cols v start end))
+    (define kh (slice-cols k start end #:rows used))
+    (define vh (slice-cols v start end #:rows used))
     (define probs (softmax (causal-scores qh kh scale)))
     (paste-cols! merged d (matmul probs vh bias) start))
   merged)

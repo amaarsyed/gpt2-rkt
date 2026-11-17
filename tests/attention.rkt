@@ -86,7 +86,16 @@
     (define v (make-tensor (list nk d) (fill (* nk d) 3)))
     (define full (attend q k v 2))
     (define one (attend (slice-rows q (sub1 nq) nq) k v 2))
-    (check-equal? (elements one) (elements (slice-rows full (sub1 nq) nq))))
+    (check-equal? (elements one) (elements (slice-rows full (sub1 nq) nq)))
+    (define big-k (make-tensor (list 10 d) (make-flvector (* 10 d) 99.0)))
+    (define big-v (make-tensor (list 10 d) (make-flvector (* 10 d) 99.0)))
+    (define kdata (tensor-data k))
+    (define vdata (tensor-data v))
+    (for ([i (in-range (* nk d))])
+      (flvector-set! (tensor-data big-k) i (flvector-ref kdata i))
+      (flvector-set! (tensor-data big-v) i (flvector-ref vdata i)))
+    (define limited (attend q big-k big-v 2 #:kv-rows nk))
+    (check-equal? (elements limited) (elements full)))
 
   (test-case "a cached key prefix is visible to the new query"
     (define q (make-tensor '(1 1) (flvector 1.0)))
