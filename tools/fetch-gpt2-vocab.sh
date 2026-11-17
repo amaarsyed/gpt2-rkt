@@ -46,6 +46,7 @@ fetch() {
     echo "sha256 mismatch for $name; downloading again" >&2
   fi
   tmp=$(mktemp)
+  trap 'rm -f "$tmp"' EXIT
   curl -fsSL -A "gpt2-rkt" -o "$tmp" "$base/$name"
   got=$(file_sha256 "$tmp")
   if [ "$got" != "$hash" ]; then
