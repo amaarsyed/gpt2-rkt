@@ -3,6 +3,7 @@
 (module+ test
   (require racket/flonum
            rackunit
+           "../src/attention.rkt"
            "../src/block.rkt"
            "../src/nn.rkt"
            "../src/tensor.rkt")
@@ -43,4 +44,97 @@
                            c-fc-b
                            c-proj-w
                            c-proj-b))))
+
+  (define (filled dims value)
+    (define n (apply * dims))
+    (make-tensor dims (make-flvector n value)))
+
+  (define (params n-head ln1-gain ln1-bias c-attn-w c-attn-b attn-proj-w attn-proj-b
+                  ln2-gain ln2-bias c-fc-w c-fc-b mlp-proj-w mlp-proj-b)
+    (make-block-params n-head ln1-gain ln1-bias c-attn-w c-attn-b attn-proj-w attn-proj-b
+                       ln2-gain ln2-bias c-fc-w c-fc-b mlp-proj-w mlp-proj-b))
+
+  (define (zero-block d n-head ln1-gain ln1-bias ln2-gain ln2-bias
+                      c-attn-w attn-proj-w c-fc-w mlp-proj-w)
+    (define inner (* 4 d))
+    (params n-head
+            ln1-gain ln1-bias
+            c-attn-w (filled (list (* 3 d)) 0.0)
+            attn-proj-w (filled (list d) 0.0)
+            ln2-gain ln2-bias
+            c-fc-w (filled (list inner) 0.0)
+            mlp-proj-w (filled (list d) 0.0)))
+
+  (test-case "the block normalizes with biased variance and eps 1e-5 before attention"
+    (check-equal? layernorm-eps 1e-5)
+    (define x (make-tensor '(1 2) (flvector 1.0 3.0)))
+    (define gain (make-tensor '(2) (flvector 1.0 1.0)))
+    (define bias (make-tensor '(2) (flvector 0.0 0.0)))
+    (define w (zero-block 2 1 gain bias gain bias
+                          (filled '(2 6) 0.0)
+                          (filled '(2 2) 0.0)
+                          (filled '(2 8) 0.0)
+                          (filled '(8 2) 0.0)))
+    (define trace (gpt2-block-parts x w))
+    (define inv (fl/ 1.0 (flsqrt (fl+ 1.0 layernorm-eps))))
+    (check-= (tensor-ref (block-trace-ln1 trace) 0 0) (- inv) 1e-12)
+    (check-= (tensor-ref (block-trace-ln1 trace) 0 1) inv 1e-12)
+    (define flat (make-tensor '(1 2) (flvector 5.0 5.0)))
+    (define flat-bias (make-tensor '(2) (flvector 0.1 -0.2)))
+    (define flat-w (zero-block 2 1 gain flat-bias gain bias
+                               (filled '(2 6) 0.0)
+                               (filled '(2 2) 0.0)
+                               (filled '(2 8) 0.0)
+                               (filled '(8 2) 0.0)))
+    (check-equal? (elements (block-trace-ln1 (gpt2-block-parts flat flat-w)))
+                  '(0.1 -0.2)))
+
+  (test-case "pre-LN adds each sublayer onto the residual stream"
+    (define x (make-tensor '(2 4) (flvector 1.0 2.0 3.0 4.0
+                                            -1.0 0.5 0.25 -0.5)))
+    (define w (zero-block 4 2
+                          (filled '(4) 0.0) (filled '(4) 0.0)
+                          (filled '(4) 0.0) (filled '(4) 0.0)
+                          (filled '(4 12) 0.2)
+                          (filled '(4 4) 0.3)
+                          (filled '(4 16) -0.1)
+                          (filled '(16 4) 0.4)))
+    (check-equal? (elements (gpt2-block x w)) (elements x))
+    (define gain (filled '(4) 1.0))
+    (define bias (filled '(4) 0.0))
+    (define attn-w (make-tensor '(4 12)
+                                (flvector 0.1 0.0 -0.1 0.2 0.0 0.1 0.0 0.2 -0.2 0.1 0.0 0.1
+                                          0.0 0.1 0.0 -0.1 0.2 0.0 0.1 0.0 0.2 -0.1 0.1 0.0
+                                          -0.1 0.2 0.1 0.0 0.0 0.1 0.2 0.0 -0.1 0.0 0.1 0.2
+                                          0.2 -0.1 0.0 0.1 0.1 0.0 0.0 0.1 -0.2 0.2 0.0 0.1)))
+    (define attn-b (make-tensor '(12) (flvector 0.01 0.0 -0.01 0.02 0.0 0.0
+                                                0.0 0.01 0.0 -0.02 0.01 0.0)))
+    (define attn-proj-w (make-tensor '(4 4) (flvector 0.2 0.0 0.1 0.0
+                                                      0.0 0.1 0.0 -0.1
+                                                      0.1 0.0 0.2 0.0
+                                                      0.0 -0.1 0.0 0.2)))
+    (define attn-proj-b (filled '(4) 0.0))
+    (define fc-w (make-tensor '(4 16)
+                              (build-flvector 64 (lambda (i) (real->double-flonum (/ (remainder i 5) 20.0))))))
+    (define fc-b (filled '(16) 0.0))
+    (define mlp-w (make-tensor '(16 4)
+                               (build-flvector 64 (lambda (i) (real->double-flonum (/ (remainder i 3) 25.0))))))
+    (define mlp-b (filled '(4) 0.0))
+    (define live (params 2 gain bias attn-w attn-b attn-proj-w attn-proj-b
+                         gain bias fc-w fc-b mlp-w mlp-b))
+    (define ln1 (layer-norm x gain bias))
+    (define attn (gpt2-attention ln1 attn-w attn-b attn-proj-w attn-proj-b 2))
+    (define res1 (tensor-add x attn))
+    (define ln2 (layer-norm res1 gain bias))
+    (define hidden (gpt2-mlp-hidden ln2 fc-w fc-b))
+    (define mlp (gpt2-mlp ln2 fc-w fc-b mlp-w mlp-b))
+    (define expected (tensor-add res1 mlp))
+    (define trace (gpt2-block-parts x live))
+    (check-equal? (elements (block-trace-ln1 trace)) (elements ln1))
+    (check-equal? (elements (block-trace-attn trace)) (elements attn))
+    (check-equal? (elements (block-trace-residual1 trace)) (elements res1))
+    (check-equal? (elements (block-trace-ln2 trace)) (elements ln2))
+    (check-equal? (elements (block-trace-mlp-hidden trace)) (elements hidden))
+    (check-equal? (elements (block-trace-out trace)) (elements expected))
+    (check-equal? (elements (gpt2-block x live)) (elements expected)))
   )
