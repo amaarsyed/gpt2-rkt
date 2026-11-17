@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Read packed query rows and write key/value projections straight to cache.
+- Add optional NN matrix-worker budgets, leaving the host-count default intact.
+- Record phase 9 head experiments, worker screening, and baseline comparison.
+
 - Use one future block per processor for matrix products.
 - Compute only visible causal attention, with request-owned score storage.
 - Size generation caches to the prompt and requested output length.
