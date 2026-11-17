@@ -164,11 +164,12 @@
 (define (run-cli argv
                  #:output-port [out (current-output-port)]
                  #:error-port [err (current-error-port)])
-  (with-handlers ([exn:fail:gpt2?
-                   (lambda (e)
-                     (displayln (exn-message e) err)
-                     1)])
-    (dispatch (argv->strings argv) out)))
+  (parameterize ([current-error-port err])
+    (with-handlers ([exn:fail:gpt2?
+                     (lambda (e)
+                       (displayln (exn-message e) err)
+                       1)])
+      (dispatch (argv->strings argv) out))))
 
 (define (dispatch args out)
   (cond

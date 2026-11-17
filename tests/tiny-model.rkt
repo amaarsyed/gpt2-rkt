@@ -71,7 +71,8 @@
                #:output-port out
                #:error-port err))
     (check-equal? code 0)
-    (check-equal? (get-output-string err) "")
+    (check-regexp-match #px"load-seconds: " (get-output-string err))
+    (check-regexp-match #px"tokens-per-second: " (get-output-string err))
     (check-equal? (get-output-string out)
                   (string-append
                    (generation-text
