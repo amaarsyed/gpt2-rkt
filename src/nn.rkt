@@ -55,14 +55,8 @@
   (fl* 0.5 (fl* x (fl+ 1.0 (fltanh inner)))))
 
 (define (require-matrix who t)
-  (unless (tensor? t)
-    (raise-argument-error who "tensor?" t))
-  (define dims (tensor-dims t))
-  (unless (fx= (length dims) 2)
-    (raise-arguments-error who
-                           "expected a rank-2 tensor"
-                           "dims" (dims->string dims)))
-  (values (car dims) (cadr dims) (tensor-data t)))
+  (define-values (rows cols) (matrix-shape who t))
+  (values rows cols (tensor-data t)))
 
 (define (parallel-work? n in out)
   (and (fx>= (processor-count) 2)
