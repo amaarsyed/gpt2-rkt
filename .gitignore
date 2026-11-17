@@ -1,0 +1,19 @@
+# Downloaded model weights. Never commit these.
+models/
+*.safetensors
+
+# Racket bytecode.
+compiled/
+
+# Python fixture tooling (tools/fixtures/ only).
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+*~
+.DS_Store
