@@ -1,6 +1,6 @@
 # gpt2-rkt
 
-Pure-Racket inference for GPT-2 Small (124M). Numeric work uses `flvector` and `racket/flonum`. On more than one processor, a matrix multiply of 32 or more rows is split across rows. A shorter multiply with 32 or more columns, including a single-token logits multiply, is split across output columns. Each split uses four times as many blocks as `processor-count`. Model weights are not in git.
+Pure-Racket inference for GPT-2 Small (124M). Numeric work uses `flvector` and `racket/flonum`. On more than one processor, a matrix multiply of at least 100000 flops is split across rows when it has 32 or more rows, and across output columns otherwise. That still covers a single-token logits multiply. A smaller multiply, including the per-head attention products, stays in one thread. Each split uses four times as many blocks as `processor-count`. Model weights are not in git.
 
 This is the 0.1.0 line. `generate` parses a request and checks the model directory. Weight loading is not implemented yet, so a missing directory is a missing-assets error, and a directory that already has the expected files stops with "model loading is not implemented".
 
@@ -53,7 +53,7 @@ racket bench/harness.rkt
 
 `src/tensor.rkt` is a row-major tensor on one `flvector`, with explicit dimensions. `src/nn.rkt` is the GPT-2 arithmetic:
 
-- `matmul` is Hugging Face Conv1D: `y[n, out] = x[n, in] · W[in, out] + b[out]`. The inner loop is i-k-j so each step reads a contiguous weight row. Thirty-two or more rows are split across rows. Fewer rows, with thirty-two or more columns, are split across columns. Both use four blocks per core.
+- `matmul` is Hugging Face Conv1D: `y[n, out] = x[n, in] · W[in, out] + b[out]`. The inner loop is i-k-j so each step reads a contiguous weight row. A product of at least 100000 flops with thirty-two or more rows is split across rows. A shorter product of that size is split across columns. Smaller products stay serial. Both splits use four blocks per core.
 - `matmul-transposed-b` is `h[n, in] · Wᵀ` with `W` stored as `[out, in]`, for tied-embedding logits. It does not allocate a transpose.
 - `tensor-add` is the residual add.
 - `softmax` is row-wise on the last axis. It subtracts the row max, and an all-masked row (every value `-inf.0`) is zeros.
