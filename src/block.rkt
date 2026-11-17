@@ -22,6 +22,7 @@
          block-trace-out
          gpt2-block-parts
          gpt2-block
+         gpt2-block-cached
          gpt2-blocks)
 
 (struct block-params (n-head
@@ -116,6 +117,40 @@
 
 (define (gpt2-block x params)
   (block-trace-out (gpt2-block-parts x params)))
+
+;; past-k and past-v are earlier rows, or #f. The new rows are appended
+;; and the returned k and v are the whole cache for this layer.
+(define (gpt2-block-cached x params past-k past-v)
+  (unless (block-params? params)
+    (raise-argument-error 'gpt2-block-cached "block-params?" params))
+  (when (or (and past-k (not past-v)) (and past-v (not past-k)))
+    (raise-arguments-error 'gpt2-block-cached
+                           "k and v caches must both be present"
+                           "k" past-k
+                           "v" past-v))
+  (define ln1 (layer-norm x
+                          (block-params-ln1-gain params)
+                          (block-params-ln1-bias params)))
+  (define mixed (matmul ln1
+                        (block-params-c-attn-w params)
+                        (block-params-c-attn-b params)))
+  (define-values (q k v) (qkv-split mixed))
+  (define kall (if past-k (tensor-append-rows past-k k) k))
+  (define vall (if past-v (tensor-append-rows past-v v) v))
+  (define heads (attend q kall vall (block-params-n-head params)))
+  (define attn (matmul heads
+                       (block-params-attn-proj-w params)
+                       (block-params-attn-proj-b params)))
+  (define residual1 (tensor-add x attn))
+  (define ln2 (layer-norm residual1
+                          (block-params-ln2-gain params)
+                          (block-params-ln2-bias params)))
+  (define mlp (gpt2-mlp ln2
+                        (block-params-c-fc-w params)
+                        (block-params-c-fc-b params)
+                        (block-params-mlp-proj-w params)
+                        (block-params-mlp-proj-b params)))
+  (values (tensor-add residual1 mlp) kall vall))
 
 (define (gpt2-blocks x params-list)
   (unless (list? params-list)
