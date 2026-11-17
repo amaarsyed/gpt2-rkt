@@ -153,6 +153,35 @@
 
   (define-runtime-path fixture-path "attention-cases.json")
 
+  (test-case "causal rows match dense attention, including parallel heads and cache capacity"
+    (define (filled rows cols salt)
+      (define data (make-flvector (* rows cols)))
+      (for ([i (in-range (flvector-length data))])
+        (flvector-set! data i (/ (real->double-flonum (- (remainder (+ i salt) 17) 8)) 7.0)))
+      (make-tensor (list rows cols) data))
+    (for ([shape (in-list '((1 7) (4 7) (129 129)))])
+      (define nq (car shape))
+      (define used (cadr shape))
+      (define q (filled nq 16 1))
+      (define k (filled (+ used 3) 16 2))
+      (define v (filled (+ used 3) 16 3))
+      (define expected (make-tensor (list nq 16) (make-flvector (* nq 16) 0.0)))
+      (for ([h (in-range 2)])
+        (define col (* h 8))
+        (define probs (softmax (causal-scores (slice-cols q col (+ col 8))
+                                             (slice-cols k col (+ col 8) #:rows used)
+                                             (attention-scale 8))))
+        (paste-cols! expected 16
+                     (matmul probs (slice-cols v col (+ col 8) #:rows used)
+                             (make-tensor '(8) (make-flvector 8 0.0))) col))
+      (define work (make-attention-work 2 (+ used 3)))
+      (define got (attend q k v 2 #:kv-rows used #:workspace work))
+      (define saved (elements got))
+      (define gap (max-abs-error saved (elements expected)))
+      (check-true (< gap 1e-12) (format "dense attention gap: ~a" gap))
+      (attend q k v 2 #:kv-rows used #:workspace work)
+      (check-equal? (elements got) saved)))
+
   (test-case "one attention layer matches the eager reference"
     (define fixture (call-with-input-file fixture-path read-json))
     (define dims (hash-ref fixture 'dims))

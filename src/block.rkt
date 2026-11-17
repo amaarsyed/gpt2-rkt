@@ -130,7 +130,7 @@
 
 ;; past-k and past-v are preallocated buffers. The new rows are written
 ;; at #:filled, and attend sees only the filled prefix.
-(define (gpt2-block-cached x params past-k past-v #:filled filled)
+(define (gpt2-block-cached x params past-k past-v #:filled filled #:workspace [workspace #f])
   (unless (block-params? params)
     (raise-argument-error 'gpt2-block-cached "block-params?" params))
   (unless (and (tensor? past-k) (tensor? past-v))
@@ -159,7 +159,8 @@
   (write-rows! past-k filled k)
   (write-rows! past-v filled v)
   (define kv-rows (+ filled nq))
-  (define heads (attend q past-k past-v (block-params-n-head params) #:kv-rows kv-rows))
+  (define heads (attend q past-k past-v (block-params-n-head params)
+                        #:kv-rows kv-rows #:workspace workspace))
   (define attn (matmul heads
                        (block-params-attn-proj-w params)
                        (block-params-attn-proj-b params)))
