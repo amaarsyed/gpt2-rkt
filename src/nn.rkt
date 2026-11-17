@@ -239,13 +239,27 @@
   (make-tensor (list n width) y))
 
 (define (dot-row h hbase W wbase in)
+  (define end (- in (remainder in 4)))
   (let loop-k ([k 0] [sum 0.0])
-    (if (unsafe-fx= k in)
-        sum
-        (loop-k (unsafe-fx+ k 1)
-                (unsafe-fl+ sum
-                            (unsafe-fl* (unsafe-flvector-ref h (unsafe-fx+ hbase k))
-                                        (unsafe-flvector-ref W (unsafe-fx+ wbase k))))))))
+    (cond
+      [(unsafe-fx= k end)
+       (let tail ([p k] [total sum])
+         (if (unsafe-fx= p in) total
+             (tail (unsafe-fx+ p 1)
+                   (unsafe-fl+ total
+                               (unsafe-fl* (unsafe-flvector-ref h (unsafe-fx+ hbase p))
+                                           (unsafe-flvector-ref W (unsafe-fx+ wbase p)))))))]
+      [else
+       (define hi (unsafe-fx+ hbase k))
+       (define wi (unsafe-fx+ wbase k))
+       (define a (unsafe-fl+ sum (unsafe-fl* (unsafe-flvector-ref h hi) (unsafe-flvector-ref W wi))))
+       (define b (unsafe-fl+ a (unsafe-fl* (unsafe-flvector-ref h (unsafe-fx+ hi 1))
+                                         (unsafe-flvector-ref W (unsafe-fx+ wi 1)))))
+       (define c (unsafe-fl+ b (unsafe-fl* (unsafe-flvector-ref h (unsafe-fx+ hi 2))
+                                         (unsafe-flvector-ref W (unsafe-fx+ wi 2)))))
+       (define d (unsafe-fl+ c (unsafe-fl* (unsafe-flvector-ref h (unsafe-fx+ hi 3))
+                                         (unsafe-flvector-ref W (unsafe-fx+ wi 3)))))
+       (loop-k (unsafe-fx+ k 4) d)])))
 
 ;; y[i, j] = sum_k h[i, k] * W[j, col0 + k].
 ;; W rows are row-stride apart. A contiguous W has row-stride = in and col0 = 0.
