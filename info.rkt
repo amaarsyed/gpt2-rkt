@@ -6,6 +6,6 @@
 (define build-deps '("rackunit-lib"))
 (define pkg-desc "Pure-Racket GPT-2 124M inference")
 (define pkg-authors '(amaarsyed))
-;; Python fixtures and docs are not Racket modules.
+;; Non-Racket directories are omitted from compilation and tests.
 (define test-omit-paths '("info.rkt" "tools" "docs" ".github"))
 (define compile-omit-paths '("tools" "docs" ".github"))

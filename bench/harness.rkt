@@ -1,13 +1,14 @@
 #lang racket/base
 
-;; Benchmark harness. Until generation exists, the workload is an flvector
-;; dot product: prompt length is the vector length, and one "token" is one
-;; dot product. The report shape (load, first token, steady tokens/sec,
-;; peak memory, short and longer prompt) is what model runs will fill in.
+;; Benchmark harness. The prompt-length report is still a placeholder
+;; flvector dot product (one "token" is one dot). The matmul report times
+;; the Conv1D kernel on a square problem, default 768×768.
 
 (require racket/flonum
          racket/format
-         racket/string)
+         racket/string
+         "../src/nn.rkt"
+         "../src/tensor.rkt")
 
 (provide flvector-dot
          short-prompt-length
@@ -20,7 +21,17 @@
          bench-sample-peak-bytes
          bench-sample-dot-sum
          run-benchmarks
-         format-benchmark-report)
+         format-benchmark-report
+         matmul-sample?
+         matmul-sample-dim
+         matmul-sample-ms
+         matmul-sample-gflops
+         matmul-sample-allocated-bytes
+         matmul-sample-gc-delta
+         matmul-sample-stats-slot-11
+         run-matmul-benchmark
+         format-matmul-report
+         default-matmul-dim)
 
 (define short-prompt-length 16)
 (define long-prompt-length 128)
@@ -34,35 +45,8 @@
                       dot-sum)
   #:transparent)
 
-(define (flvector-dot a b)
-  (unless (flvector? a)
-    (raise-argument-error 'flvector-dot "flvector?" 0 a b))
-  (unless (flvector? b)
-    (raise-argument-error 'flvector-dot "flvector?" 1 a b))
-  (define n (flvector-length a))
-  (unless (= n (flvector-length b))
-    (raise-arguments-error 'flvector-dot
-                           "lengths differ"
-                           "first length" n
-                           "second length" (flvector-length b)))
-  (let loop ([i 0] [acc 0.0])
-    (cond
-      [(= i n) acc]
-      [else
-       (loop (add1 i)
-             (fl+ acc (fl* (flvector-ref a i) (flvector-ref b i))))])))
-
-(define (fill-flvector! vec value)
-  (define n (flvector-length vec))
-  (let loop ([i 0])
-    (unless (= i n)
-      (flvector-set! vec i value)
-      (loop (add1 i)))))
-
 (define (make-filled-flvector n value)
-  (define vec (make-flvector n))
-  (fill-flvector! vec value)
-  vec)
+  (make-flvector n value))
 
 (define (elapsed-ms thunk)
   (define start (current-inexact-monotonic-milliseconds))
@@ -74,20 +58,15 @@
     (raise-argument-error 'run-benchmarks "exact-positive-integer?" prompt-length))
   (unless (exact-positive-integer? steady-iters)
     (raise-argument-error 'run-benchmarks "exact-positive-integer?" steady-iters))
-  (define peak (current-memory-use))
-  (define (note!)
-    (set! peak (max peak (current-memory-use))))
   (define-values (load-ms loaded)
     (elapsed-ms
      (lambda ()
        (cons (make-filled-flvector prompt-length 1.0)
              (make-filled-flvector prompt-length 2.0)))))
-  (note!)
   (define left (car loaded))
   (define right (cdr loaded))
   (define-values (first-ms first-dot)
     (elapsed-ms (lambda () (flvector-dot left right))))
-  (note!)
   (define-values (steady-ms steady-sum)
     (elapsed-ms
      (lambda ()
@@ -96,7 +75,6 @@
            [(= i steady-iters) acc]
            [else
             (loop (add1 i) (fl+ acc (flvector-dot left right)))])))))
-  (note!)
   (define steady-sec (/ steady-ms 1000.0))
   (define tokens-per-sec
     (if (> steady-sec 0.0)
@@ -106,7 +84,7 @@
                 load-ms
                 first-ms
                 tokens-per-sec
-                peak
+                (current-memory-use 'peak)
                 (fl+ first-dot steady-sum)))
 
 (define (run-benchmarks #:prompt-lengths [prompt-lengths (list short-prompt-length
@@ -132,7 +110,7 @@
           (format "vm: ~a" (system-type 'vm))
           "workload: flvector-dot"
           "note: placeholder kernel until model load exists; one token is one dot product"
-          "note: peak-bytes is the max current-memory-use sample, not OS RSS")
+          "note: peak-bytes is current-memory-use 'peak, the process high-water mark across collections")
     (apply append
            (for/list ([sample (in-list samples)])
              (list
@@ -145,10 +123,66 @@
    "\n"
    #:after-last "\n"))
 
+(define default-matmul-dim 768)
+
+(struct matmul-sample (dim ms gflops allocated-bytes gc-delta stats-slot-11)
+  #:transparent)
+
+(define (square-matmul-args dim value)
+  (define n (* dim dim))
+  (define data (make-flvector n value))
+  (define bias (make-flvector dim 0.0))
+  (values (make-tensor (list dim dim) data)
+          (make-tensor (list dim dim) (make-flvector n value))
+          (make-tensor (list dim) bias)))
+
+;; 2*dim^3 flops. Warm up once, collect, then time a second call.
+(define (run-matmul-benchmark #:dim [dim default-matmul-dim])
+  (unless (exact-positive-integer? dim)
+    (raise-argument-error 'run-matmul-benchmark "exact-positive-integer?" dim))
+  (define-values (x W b) (square-matmul-args dim 1.0))
+  (matmul x W b)
+  (collect-garbage)
+  (define before (make-vector 12))
+  (vector-set-performance-stats! before)
+  (define alloc-before (current-memory-use 'cumulative))
+  (define-values (ms _result)
+    (elapsed-ms (lambda () (matmul x W b))))
+  (define alloc-after (current-memory-use 'cumulative))
+  (define after (make-vector 12))
+  (vector-set-performance-stats! after)
+  (define seconds (/ ms 1000.0))
+  (define flops (* 2.0 dim dim dim))
+  (define gflops
+    (if (> seconds 0.0)
+        (/ flops seconds 1e9)
+        +inf.0))
+  (matmul-sample dim
+                 ms
+                 gflops
+                 (- alloc-after alloc-before)
+                 (- (vector-ref after 3) (vector-ref before 3))
+                 (vector-ref after 11)))
+
+(define (format-matmul-report sample)
+  (string-join
+   (list (format "matmul-dim: ~a" (matmul-sample-dim sample))
+         (format "matmul-ms: ~a" (format-number (matmul-sample-ms sample)))
+         (format "matmul-gflops: ~a" (format-number (matmul-sample-gflops sample)))
+         (format "matmul-allocated-bytes: ~a" (matmul-sample-allocated-bytes sample))
+         (format "matmul-gc-delta: ~a" (matmul-sample-gc-delta sample))
+         (format "matmul-stats-slot-11: ~a" (matmul-sample-stats-slot-11 sample))
+         "note: matmul-allocated-bytes is the current-memory-use 'cumulative delta of the timed call"
+         "note: matmul-gc-delta is vector-set-performance-stats! slot 3 over that call"
+         "note: matmul-stats-slot-11 is vector-set-performance-stats! slot 11 after that call")
+   "\n"
+   #:after-last "\n"))
+
 (module+ main
   (define args (vector->list (current-command-line-arguments)))
   (unless (null? args)
     (eprintf "bench: unexpected argument: ~a\n" (car args))
     (eprintf "usage: racket bench/harness.rkt\n")
     (exit 1))
-  (display (format-benchmark-report (run-benchmarks))))
+  (display (format-benchmark-report (run-benchmarks)))
+  (display (format-matmul-report (run-matmul-benchmark))))
