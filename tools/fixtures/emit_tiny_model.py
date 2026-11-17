@@ -46,7 +46,9 @@ def fill(shape, salt):
     n = 1
     for size in shape:
         n *= size
-    values = [((i * 17 + salt) % 100) / 50.0 - 1.0 for i in range(n)]
+    # 10007 is prime and larger than vocab * width (257 * 16), so a row
+    # is not a copy of a row 25 places earlier.
+    values = [((i * 17 + salt * 3) % 10007) / 5003.0 - 1.0 for i in range(n)]
     return torch.tensor(values, dtype=torch.float32).reshape(shape)
 
 
@@ -157,7 +159,11 @@ def main() -> None:
     (OUT / "config.json").write_text(json.dumps(config.to_dict(), indent=2) + "\n")
     (OUT / "vocab.json").write_text(json.dumps(vocab, ensure_ascii=False) + "\n")
     (OUT / "merges.txt").write_text("#version: 0.2\n")
-    state = {name: tensor for name, tensor in model.state_dict().items()}
+    state = {
+        name: tensor
+        for name, tensor in model.state_dict().items()
+        if name != "lm_head.weight"
+    }
     write_safetensors(OUT / "model.safetensors", state)
     reference = {
         "prompt": PROMPT,

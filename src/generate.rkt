@@ -49,11 +49,23 @@
       (raise-gpt2 "seed requires temperature > 0"))
     (values model-dir prompt max-new-tokens temp top-k seed)))
 
+(define (report-run model-dir result seconds)
+  (define loaded (current-load-report))
+  (define n (length (generation-token-ids result)))
+  (define rate (if (or (zero? n) (= seconds 0.0)) 0.0 (/ n seconds)))
+  (when loaded
+    (fprintf (current-error-port) "load-seconds: ~a\n" (load-report-seconds loaded))
+    (fprintf (current-error-port) "load-bytes: ~a\n" (load-report-bytes loaded)))
+  (fprintf (current-error-port) "generate-seconds: ~a\n" seconds)
+  (fprintf (current-error-port) "tokens-per-second: ~a\n" rate)
+  (fprintf (current-error-port) "model-dir: ~a\n" model-dir))
+
 (define (generate cfg #:output-port [out #f])
   (unless (generate-config? cfg)
     (raise-argument-error 'generate "generate-config?" cfg))
   (define model (load-model (generate-config-model-dir cfg)))
   (define ids (encode (gpt2-model-tokenizer model) (generate-config-prompt cfg)))
+  (define started (current-inexact-milliseconds))
   (define result
     (model-generate model ids (generate-config-max-new-tokens cfg)
                     #:temperature (generate-config-temperature cfg)
@@ -61,5 +73,8 @@
                     #:seed (generate-config-seed cfg)
                     #:output-port out))
   (when out
-    (newline out))
+    (newline out)
+    (report-run (generate-config-model-dir cfg)
+                result
+                (/ (- (current-inexact-milliseconds) started) 1000.0)))
   result)

@@ -2,13 +2,13 @@
 
 Pure-Racket inference for GPT-2 Small (124M). Numeric work uses `flvector` and `racket/flonum`. On more than one processor, a matrix multiply of at least 100000 flops is split across rows when it has 32 or more rows, and across output columns otherwise. That still covers a single-token logits multiply. A smaller multiply, including the per-head attention products, stays in one thread. Each split uses four times as many blocks as `processor-count`. Model weights are not in git.
 
-This is the 0.1.0 line. `generate` loads a GPT-2 directory, encodes the prompt, and writes sampled text. A missing file is a missing-assets error. `model.safetensors` is read as little-endian F32. The reader is the one Milestone 6 will extend, so the tiny model uses the same file the CLI already requires.
+This is the 0.1.0 line. `generate` loads a GPT-2 directory, encodes the prompt, and writes each decoded token as it is chosen. A missing or corrupt file names the asset and `sh tools/fetch-gpt2-vocab.sh`. `model.safetensors` is little-endian F32, read in place from the header offsets. Names may be bare (`wte.weight`) or prefixed with `transformer.`. The `attn.bias` mask buffers are ignored. The tiny model uses the same reader.
 
 Tested with Racket CS 9.3. CI installs that version and runs `raco test`. Python is not required.
 
 ## Commands
 
-Fetch the BPE files (about 1.5 MB; weights stay out of the tree), then run the tests:
+Fetch the pinned tokenizer, `config.json`, and `model.safetensors` (the weights stay out of git), then run the tests:
 
 ```sh
 sh tools/fetch-gpt2-vocab.sh
@@ -65,7 +65,7 @@ racket bench/harness.rkt
 
 `gpt2-attention` is one GPT-2 block's attention. `c_attn` is a Conv1D to `[n, 3*d]`, split on the last axis into `q`, `k`, and `v`. Head `h` is columns `[h*d-head, (h+1)*d-head)`, not an interleaved stride. Scores are dotted per head, scaled by `1/sqrt(d-head)` (so `1/8` when the head is 64), and a key strictly after the query is `-inf.0` before the stable softmax. The heads are merged and passed through `c_proj`.
 
-`k` and `v` may be longer than `q`. Query row `i` is at position `rows(k) - rows(q) + i`, which is the same alignment as a past-key prefix: the new queries see the cached keys and not a later query in the same chunk. Milestone 5 can append key and value rows and call `attend` unchanged. That is the cache seam; the cache itself is not stored here.
+`k` and `v` may be longer than `q`. Query row `i` is at position `rows(k) - rows(q) + i`, which is the same alignment as a past-key prefix: the new queries see the cached keys and not a later query in the same chunk. `attend` takes `#:kv-rows` so a buffer allocated to `n_positions` is not treated as a full sequence. The model writes each new key and value row into that buffer.
 
 ## Transformer block
 
@@ -73,13 +73,13 @@ racket bench/harness.rkt
 
 ## Inference
 
-`load-model` reads `config.json`, the tokenizer files, and little-endian F32 `model.safetensors`. `tests/tiny-gpt2` is a 2-layer eager model in that format. `racket main.rkt generate --model-dir tests/tiny-gpt2 --prompt hi --max-new-tokens 4` prints its greedy continuation. `next-token-logits` scores the next id after a prompt. `model-generate` scores the prompt once, then one new token at a time from the per-layer key/value cache. It stops at `eos_token_id` (50256 when the config omits it) or at the requested count. The id list includes that eos token; the printed text does not. A UTF-8 character split across tokens stays buffered until the next token completes it, or until generation finishes. Omit temperature for greedy decoding. A temperature of 0 or less is an error. `top-k` keeps the largest scores before the softmax. A seed uses a private generator. The prompt plus the new tokens must fit in 1024 positions. `position-embed` takes `#:start` so a cached token uses its absolute position.
+`load-model` reads `config.json`, the tokenizer files, and little-endian F32 `model.safetensors`. It checks every tensor shape, names a missing or unexpected key, and records the load time and memory. `tests/tiny-gpt2` is a 2-layer eager model in that format. `racket main.rkt generate --model-dir tests/tiny-gpt2 --prompt hi --max-new-tokens 4` prints its greedy continuation. `next-token-logits` and generation score only the last hidden row. `model-generate` scores the prompt once, then one new token at a time. Each layer's key and value buffer is allocated to `n_positions` and updated in place. It stops at `eos_token_id` (50256 when the config omits it) or at the requested count. The id list includes that eos token; the printed text does not. A UTF-8 character split across tokens stays buffered until the next token completes it, or until generation finishes, and the finished piece is written as soon as the token is chosen. Omit temperature for greedy decoding. A temperature of 0 or less is an error. A positive temperature subtracts the row max before dividing. `top-k` keeps the largest scores before the softmax. A seed is an integer from 0 through 2147483647 and uses a private generator. The prompt plus the new tokens must fit in `min(1024, n_positions)`. `position-embed` takes `#:start` so a cached token uses its absolute position. After the text, `generate` writes `load-seconds`, `load-bytes`, and `tokens-per-second` to the error port.
 
 ## Tokenizer and embeddings
 
 `encode` and `decode` are GPT-2 byte-level BPE. The byte map is reversible. The pre-tokenizer uses Unicode whitespace, not the ASCII-only class, and contractions are case-sensitive. `<|endoftext|>` is token 50256. Matching that literal in a prompt is tiktoken and HF behaviour, so the text `<|endoftext|>` encodes as 50256. `token-embed` and `position-embed` look up rows of `wte` and `wpe`. A sequence longer than 1024 positions is an error.
 
-The vocab and merges are pinned to `openai-community/gpt2` at `607a30d783dfa663caf39e06633721c8d4cfcd7e`. Their sha256 digests live in `tools/gpt2-assets.sha256`. `tools/fetch-gpt2-vocab.sh` checks them with `sha256sum`, or `shasum -a 256` when that is missing, and caches the files under `models/gpt2/`.
+The vocab, merges, `config.json`, and `model.safetensors` are pinned to `openai-community/gpt2` at `607a30d783dfa663caf39e06633721c8d4cfcd7e`. Their sha256 digests live in `tools/gpt2-assets.sha256`. `tools/fetch-gpt2-vocab.sh` checks every name in that file with `sha256sum`, or `shasum -a 256` when that is missing, and caches the files under `models/gpt2/`.
 
 ## Layout
 
@@ -99,4 +99,4 @@ The vocab and merges are pinned to `openai-community/gpt2` at `607a30d783dfa663c
 - `merges.txt`
 - `model.safetensors`
 
-A download script with a sha256 check will land in a later milestone. Do not commit weights.
+`sh tools/fetch-gpt2-vocab.sh` downloads them and checks the digests. A missing directory, a missing file, or a bad digest names the file and that command. Do not commit weights.

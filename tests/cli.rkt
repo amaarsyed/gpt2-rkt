@@ -185,6 +185,7 @@
     (check-regexp-match #px"directory does not exist" (outcome-err result))
     (check-regexp-match #px"config.json" (outcome-err result))
     (check-regexp-match #px"model.safetensors" (outcome-err result))
+    (check-regexp-match #px"sh tools/fetch-gpt2-vocab.sh" (outcome-err result))
     (check-exn
      (lambda (e)
        (and (exn:fail:gpt2? e)
