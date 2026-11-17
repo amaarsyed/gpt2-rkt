@@ -31,16 +31,6 @@
   (define parts (split-last mixed 3))
   (values (car parts) (cadr parts) (caddr parts)))
 
-(define (matrix-shape who t)
-  (unless (tensor? t)
-    (raise-argument-error who "tensor?" t))
-  (define dims (tensor-dims t))
-  (unless (= (length dims) 2)
-    (raise-arguments-error who
-                           "expected a rank-2 tensor"
-                           "dims" (dims->string dims)))
-  (values (car dims) (cadr dims)))
-
 (define (causal-scores q k scale)
   (unless (and (flonum? scale) (fl> scale 0.0))
     (raise-argument-error 'causal-scores "positive flonum?" scale))
@@ -69,17 +59,6 @@
                          -inf.0
                          (fl* scale (flvector-ref src idx))))))
   (make-tensor (list nq nk) out))
-
-(define (paste-cols! dest dest-cols src col0)
-  (define rows (car (tensor-dims src)))
-  (define width (cadr (tensor-dims src)))
-  (define from (tensor-data src))
-  (define to (tensor-data dest))
-  (for ([i (in-range rows)])
-    (define src-base (* i width))
-    (define dest-base (+ (* i dest-cols) col0))
-    (for ([j (in-range width)])
-      (flvector-set! to (+ dest-base j) (flvector-ref from (+ src-base j))))))
 
 (define (attend q k v n-head)
   (unless (exact-positive-integer? n-head)
