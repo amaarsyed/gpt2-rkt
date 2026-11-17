@@ -1,7 +1,9 @@
 #lang racket/base
 
 (module+ test
-  (require racket/flonum
+  (require json
+           racket/flonum
+           racket/runtime-path
            rackunit
            "../src/attention.rkt"
            "../src/block.rkt"
@@ -179,4 +181,80 @@
                   (elements (layer-norm mid gain bias)))
     (check-equal? (elements (gpt2-ln-f (gpt2-blocks x (list b1 b2)) gain bias))
                   (elements (layer-norm mid gain bias))))
+
+  (define (flat-flonums nested)
+    (let loop ([nested nested])
+      (cond
+        [(list? nested) (apply append (map loop nested))]
+        [(and (string? nested) (string=? nested "-inf")) (list -inf.0)]
+        [(real? nested) (list (real->double-flonum nested))]
+        [else (error 'block-fixture "bad number: ~a" nested)])))
+
+  (define (flvector-from nums)
+    (define data (make-flvector (length nums)))
+    (for ([n (in-list nums)] [i (in-naturals)])
+      (flvector-set! data i n))
+    data)
+
+  (define (tensor-from nested dims)
+    (make-tensor dims (flvector-from (flat-flonums nested))))
+
+  (define (max-abs-error got expected)
+    (for/fold ([m 0.0]) ([g (in-list got)] [e (in-list expected)])
+      (max m (abs (- g e)))))
+
+  (define (within-tolerance? got expected)
+    (for/and ([g (in-list got)] [e (in-list expected)])
+      (<= (abs (- g e)) (+ 1e-3 (* 1e-4 (abs e))))))
+
+  (define-runtime-path fixture-path "block-cases.json")
+
+  (define (params-from block d inner n-head)
+    (params n-head
+            (tensor-from (hash-ref block 'ln1-gain) (list d))
+            (tensor-from (hash-ref block 'ln1-bias) (list d))
+            (tensor-from (hash-ref block 'c-attn-weight) (list d (* 3 d)))
+            (tensor-from (hash-ref block 'c-attn-bias) (list (* 3 d)))
+            (tensor-from (hash-ref block 'attn-proj-weight) (list d d))
+            (tensor-from (hash-ref block 'attn-proj-bias) (list d))
+            (tensor-from (hash-ref block 'ln2-gain) (list d))
+            (tensor-from (hash-ref block 'ln2-bias) (list d))
+            (tensor-from (hash-ref block 'c-fc-weight) (list d inner))
+            (tensor-from (hash-ref block 'c-fc-bias) (list inner))
+            (tensor-from (hash-ref block 'mlp-proj-weight) (list inner d))
+            (tensor-from (hash-ref block 'mlp-proj-bias) (list d))))
+
+  (test-case "two eager blocks and ln_f match within tolerance"
+    (define fixture (call-with-input-file fixture-path read-json))
+    (define dims (hash-ref fixture 'dims))
+    (define seq (hash-ref dims 'seq))
+    (define d (hash-ref dims 'd-model))
+    (define inner (hash-ref dims 'inner))
+    (define n-head (hash-ref dims 'n-head))
+    (define blocks (hash-ref fixture 'blocks))
+    (define hidden (tensor-from (hash-ref fixture 'x) (list seq d)))
+    (define params-list
+      (for/list ([block (in-list blocks)])
+        (params-from block d inner n-head)))
+    (for ([block (in-list blocks)] [p (in-list params-list)])
+      (define trace (gpt2-block-parts hidden p))
+      (define pairs
+        (list (list "ln1" (elements (block-trace-ln1 trace)) (flat-flonums (hash-ref block 'ln1)))
+              (list "attn" (elements (block-trace-attn trace)) (flat-flonums (hash-ref block 'attn)))
+              (list "residual1" (elements (block-trace-residual1 trace)) (flat-flonums (hash-ref block 'residual1)))
+              (list "ln2" (elements (block-trace-ln2 trace)) (flat-flonums (hash-ref block 'ln2)))
+              (list "mlp-hidden" (elements (block-trace-mlp-hidden trace)) (flat-flonums (hash-ref block 'mlp-hidden)))
+              (list "out" (elements (block-trace-out trace)) (flat-flonums (hash-ref block 'out)))))
+      (for ([pair (in-list pairs)])
+        (check-equal? (length (cadr pair)) (length (caddr pair)) (car pair))
+        (check-true (within-tolerance? (cadr pair) (caddr pair))
+                    (format "~a max abs error ~a" (car pair) (max-abs-error (cadr pair) (caddr pair)))))
+      (set! hidden (block-trace-out trace)))
+    (define stacked (gpt2-blocks (tensor-from (hash-ref fixture 'x) (list seq d)) params-list))
+    (define final (gpt2-ln-f stacked
+                             (tensor-from (hash-ref fixture 'ln-f-gain) (list d))
+                             (tensor-from (hash-ref fixture 'ln-f-bias) (list d))))
+    (define expected-final (flat-flonums (hash-ref fixture 'ln-f)))
+    (check-true (within-tolerance? (elements final) expected-final)
+                (format "ln_f max abs error ~a" (max-abs-error (elements final) expected-final))))
   )
