@@ -21,16 +21,15 @@
     [(and (real? n) (integer? n) (>= n 0)) (inexact->exact n)]
     [else #f]))
 
-(define (f32-flvector raw)
-  (define nbytes (bytes-length raw))
-  (unless (zero? (remainder nbytes 4))
-    (raise-gpt2 (format "safetensors F32 data length is not a multiple of 4: ~a" nbytes)))
-  (define n (quotient nbytes 4))
+;; Read n little-endian F32 values from bs at start. The caller has
+;; already checked that the range is inside bs. The official payload is
+;; not 4-byte aligned, and this reads it in place.
+(define (f32-flvector bs start n)
   (define out (make-flvector n))
-  ;; The byte range is checked above, so the unsafe stores stay in range.
   (for ([i (in-range n)])
-    (define base (unsafe-fx* i 4))
-    (unsafe-flvector-set! out i (floating-point-bytes->real raw #f base (unsafe-fx+ base 4))))
+    (define base (unsafe-fx+ start (unsafe-fx* i 4)))
+    (unsafe-flvector-set! out i
+                          (floating-point-bytes->real bs #f base (unsafe-fx+ base 4))))
   out)
 
 (define (safetensors-entry-name key)
@@ -83,5 +82,9 @@
        (unless (and start end (<= 0 start end) (<= (+ data-base end) (bytes-length bs)))
          (raise-gpt2 (format "safetensors offsets are out of range: ~a" name)))
        (define dims (map read-exact-integer shape))
-       (define raw (subbytes bs (+ data-base start) (+ data-base end)))
-       (hash-set table name (make-tensor dims (f32-flvector raw)))])))
+       (define count (apply * dims))
+       (define nbytes (- end start))
+       (unless (= nbytes (* 4 count))
+         (raise-gpt2 (format "safetensors byte length does not match shape: ~a" name)))
+       (hash-set table name
+                 (make-tensor dims (f32-flvector bs (+ data-base start) count)))])))

@@ -77,6 +77,20 @@
        (delete-file odd)
        (delete-file padded))))
 
+  (test-case "a byte length that disagrees with the shape is a gpt2 error"
+    (define header
+      (string->bytes/utf-8
+       "{\"row\":{\"dtype\":\"F32\",\"shape\":[1,2],\"data_offsets\":[0,4]}}"))
+    (define path (write-file header (real->floating-point-bytes 1.0 4 #f)))
+    (dynamic-wind
+     void
+     (lambda ()
+       (check-exn exn:fail:gpt2?
+                  (lambda () (read-safetensors path)))
+       (check-exn #rx"row"
+                  (lambda () (read-safetensors path))))
+     (lambda () (delete-file path))))
+
   (test-case "a skipped attn.bias buffer is not decoded"
     (define header
       (string->bytes/utf-8
