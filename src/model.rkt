@@ -209,23 +209,6 @@
      (define masked (if top-k (mask-top-k scaled top-k) scaled))
      (sample-index (tensor-data (softmax (make-tensor (list (flvector-length logits)) masked))))]))
 
-(define (emit-text model ids out)
-  (define tok (gpt2-model-tokenizer model))
-  (cond
-    [(not tok) ""]
-    [else
-     (define dec (make-token-decoder tok))
-     (define pieces
-       (for/list ([id (in-list ids)]
-                  #:unless (= id (gpt2-model-eos-id model)))
-         (define piece (token-decoder-add dec id))
-         (when out (display piece out))
-         piece))
-     (define tail (token-decoder-finish dec))
-     (when (and out (not (string=? tail "")))
-       (display tail out))
-     (apply string-append (append pieces (list tail)))]))
-
 (define (model-generate model ids max-new
                         #:temperature [temperature #f]
                         #:top-k [top-k #f]
@@ -257,17 +240,33 @@
           (choose-token logits temperature top-k))
         (choose-token logits temperature top-k)))
   (define eos (gpt2-model-eos-id model))
+  (define tok (gpt2-model-tokenizer model))
+  (define dec (and tok (make-token-decoder tok)))
+  (define pieces '())
+  (define (emit-id id)
+    (when (and dec (not (= id eos)))
+      (define piece (token-decoder-add dec id))
+      (set! pieces (cons piece pieces))
+      (when (and out (not (string=? piece "")))
+        (display piece out)
+        (flush-output out))))
   (define-values (first-logits cache)
     (model-forward model ids (empty-kv-cache model)))
   (define first (choose (last-row first-logits)))
+  (emit-id first)
   (define new
     (let loop ([cache cache] [chosen first] [acc (list first)] [left (sub1 max-new)])
       (if (or (zero? left) (= chosen eos))
           (reverse acc)
           (let-values ([(logits cache) (model-forward model (list chosen) cache)])
             (define nxt (choose (last-row logits)))
+            (emit-id nxt)
             (loop cache nxt (cons nxt acc) (sub1 left))))))
-  (generation new (emit-text model new out)))
+  (define tail (if dec (token-decoder-finish dec) ""))
+  (when (and out (not (string=? tail "")))
+    (display tail out)
+    (flush-output out))
+  (generation new (apply string-append (reverse (cons tail pieces)))))
 
 (define (config-int cfg key default)
   (define value (hash-ref cfg key default))
