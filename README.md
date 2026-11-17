@@ -79,6 +79,11 @@ racket main.rkt generate \
 
 ## Numeric kernels
 
+The [phase 6 and phase 7 comparison](docs/PHASE6-vs-PHASE7.md) measures the two
+milestone merges on the same Windows machine with one shared driver. It records
+load, prefill, 128-token generation, matrix kernels, and memory, with raw samples
+and matching greedy token IDs. These results are separate from the VM reference.
+
 `src/tensor.rkt` is a row-major tensor on one `flvector`, with explicit dimensions. `src/nn.rkt` is the GPT-2 arithmetic:
 
 - `matmul` is Hugging Face Conv1D: `y[n, out] = x[n, in] · W[in, out] + b[out]`. The inner loop is i-k-j so each step reads a contiguous weight row. A product of at least 100000 flops with thirty-two or more rows is split across rows. A shorter product of that size is split across columns. Smaller products stay serial. Both splits use four blocks per core.
