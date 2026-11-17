@@ -36,9 +36,7 @@
   #:constructor-name raw-block-params
   #:transparent)
 
-;; Keywords, not positions: a gain/bias swap has the same shape.
-;; block-params-from-tensors uses the Hugging Face suffixes so a loader
-;; can pass one layer's tensors without reordering fields.
+;; Keywords avoid same-shape gain/bias swaps; tensor names use HF suffixes.
 (define (make-block-params #:n-head n-head
                            #:ln1-gain ln1-gain
                            #:ln1-bias ln1-bias

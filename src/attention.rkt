@@ -1,17 +1,7 @@
 #lang racket/base
 
-;; GPT-2 causal attention in the Hugging Face Conv1D layout.
-;;
-;; c_attn yields [n, 3*d]. That axis is split into q, k, and v, each
-;; [n, d]. Head h is the contiguous column block [h*d-head, (h+1)*d-head).
-;; Scores are scaled by 1/sqrt(d-head). A key strictly after the query's
-;; position is -inf, then softmax, then the merge and c_proj.
-;;
-;; KV cache: k and v may have more rows than q. Query row i sits at
-;; absolute position (rows(k) - rows(q) + i). #:kv-rows limits that
-;; count when the buffer is longer than the filled prefix. Each head
-;; reads its columns from that prefix in place, with a column offset,
-;; instead of copying the prefix out.
+;; Causal attention with contiguous head columns and 1/sqrt(d-head) scaling.
+;; Query i sits at kv-rows - query-rows + i; #:kv-rows limits cache reads.
 
 (require racket/flonum
          racket/future
@@ -27,8 +17,7 @@
          attend
          gpt2-attention)
 
-;; Scores belong to one request. Heads use disjoint portions, and each
-;; query reuses its head's row after the previous output is complete.
+;; Request-owned scratch: one reusable score row per head.
 (struct attention-work (heads capacity scores) #:transparent)
 
 (define (make-attention-work heads capacity)
