@@ -7,38 +7,13 @@
            rackunit
            "../src/attention.rkt"
            "../src/nn.rkt"
-           "../src/tensor.rkt")
+           "../src/tensor.rkt"
+           "fixture-util.rkt")
 
   (define (elements t)
     (define data (tensor-data t))
     (for/list ([i (in-range (flvector-length data))])
       (flvector-ref data i)))
-
-  (define (flat-flonums nested)
-    (let loop ([nested nested])
-      (cond
-        [(list? nested) (apply append (map loop nested))]
-        [(and (string? nested) (string=? nested "-inf")) (list -inf.0)]
-        [(real? nested) (list (real->double-flonum nested))]
-        [else (error 'attention-fixture "bad number: ~a" nested)])))
-
-  (define (flvector-from nums)
-    (define data (make-flvector (length nums)))
-    (for ([n (in-list nums)] [i (in-naturals)])
-      (flvector-set! data i n))
-    data)
-
-  (define (tensor-from nested dims)
-    (make-tensor dims (flvector-from (flat-flonums nested))))
-
-  (define (max-abs-error got expected)
-    (for/fold ([m 0.0]) ([g (in-list got)] [e (in-list expected)])
-      (max m (abs (- g e)))))
-
-  (define (within-tolerance? got expected)
-    (for/and ([g (in-list got)] [e (in-list expected)])
-      (or (and (eqv? g -inf.0) (eqv? e -inf.0))
-          (<= (abs (- g e)) (+ 1e-3 (* 1e-4 (abs e)))))))
 
   (test-case "q, k, and v are contiguous thirds of the last axis"
     (define mixed (make-tensor '(1 6) (flvector 1.0 2.0 3.0 4.0 5.0 6.0)))
