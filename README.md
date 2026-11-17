@@ -4,7 +4,39 @@ Pure-Racket inference for GPT-2 Small (124M). Numeric work uses `flvector` and `
 
 This is the 0.1.0 line. `generate` loads a GPT-2 directory, encodes the prompt, and writes each decoded token as it is chosen. A missing file names the asset and `sh tools/fetch-gpt2-vocab.sh`. The fetch script and the digest check reject a corrupt file; `load-model` checks shapes and keys, not the digest. `model.safetensors` is little-endian F32, read in place from the header offsets. Names may be bare (`wte.weight`) or prefixed with `transformer.`. The `attn.bias` and `attn.masked_bias` buffers are ignored. A `lm_head.weight` that matches `wte` is accepted and unused. The tiny model uses the same reader.
 
-Tested with Racket CS 9.3. CI installs that version and runs `raco test`. Python is not required.
+Tested with Racket CS 9.3. CI installs that version and runs `raco test`. Python is not required. There is no `v0.1.0` tag yet.
+
+## Quickstart
+
+Fetch the pinned files, run the tests, then generate. The weights stay out of git.
+
+```sh
+sh tools/fetch-gpt2-vocab.sh
+raco test .
+racket main.rkt generate \
+  --model-dir models/gpt2 \
+  --prompt "Once upon a time" \
+  --max-new-tokens 16
+```
+
+The same call from Racket. `#f` leaves temperature, top-k, and seed unset, which is greedy:
+
+```racket
+#lang racket/base
+(require "main.rkt")
+
+(define result
+  (generate (generate-config "models/gpt2" "Once upon a time" 16 #f #f #f)))
+(displayln (generation-text result))
+```
+
+On the machine that should own the published numbers, after the stack is merged:
+
+```sh
+sh bench/run.sh
+```
+
+That checks the pinned files first, then writes `bench/results/<machine>-<date>.json` and a markdown table. The checked-in `vm-reference` file is a cloud VM run, not an M5 Pro.
 
 ## Commands
 
@@ -43,11 +75,7 @@ racket main.rkt generate \
   --seed 1
 ```
 
-Benchmark harness. This prints the Racket version, VM, and machine, then the reports. The prompt report is still a placeholder `flvector` dot product: load time, first-token latency, steady-state tokens per second, and `(current-memory-use 'peak)` for a short prompt length (16) and a longer one (128). Each length runs in its own process, because `'peak` is a process-lifetime high-water mark. The matmul report warms up, then prints the median of five runs for a 768×768 Conv1D multiply and for a 1×768 · 768×50257 logits multiply: milliseconds, GFLOP/s, bytes allocated, and `vector-set-performance-stats!` counters:
-
-```sh
-racket bench/harness.rkt
-```
+`sh bench/run.sh` is the model benchmark: load time, prefill at 16, 128, 512, and 1000 tokens, greedy decode of 128 tokens, and the 768² and 1×768·768×50257 matmuls. Each configuration is its own process. It warms up once and reports the median of `--runs` (default 3). `racket bench/harness.rkt` is the CI smoke: a placeholder dot product at lengths 16 and 128, plus those two matmuls as a median of five runs.
 
 ## Numeric kernels
 
