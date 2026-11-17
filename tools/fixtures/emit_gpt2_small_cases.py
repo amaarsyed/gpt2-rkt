@@ -2,8 +2,9 @@
 
 torch 2.5.1 and transformers 4.46.3, fp32, TF32 off, eager attention.
 The script reads the pinned files under models/gpt2 and writes ids,
-summary stats, sampled values, top last-position logits, and a
-16-token greedy continuation. It does not write the full tensors.
+summary stats, the full last row in fp32 and float64, top
+last-position logits, and a 16-token greedy continuation. It does not
+write the full tensors. The float64 row is the tighter reference.
 """
 
 import json
@@ -27,21 +28,54 @@ MAX_NEW = 16
 TOP = 8
 
 
-def summarize(tensor):
+def last_row(tensor):
+    row = tensor.detach().to(dtype=torch.float64).reshape(-1, tensor.shape[-1])[-1].cpu()
+    return [float(v) for v in row]
+
+
+def summarize(tensor, reference):
     flat = tensor.detach().to(dtype=torch.float64).reshape(-1).cpu()
-    n = int(flat.numel())
-    step = max(1, n // 32)
-    indexes = list(range(0, n, step))
-    for extra in (0, n - 1):
-        if extra not in indexes:
-            indexes.append(extra)
-    indexes = indexes[:48]
     return {
-        "count": n,
+        "count": int(flat.numel()),
         "min": float(flat.min()),
         "max": float(flat.max()),
         "mean": float(flat.mean()),
-        "samples": [{"i": int(i), "v": float(flat[i])} for i in indexes],
+        "last_row": last_row(tensor),
+        "last_row_f64": last_row(reference),
+    }
+
+
+def forward_stages(model, ids):
+    row = torch.tensor([ids])
+    captured = {}
+
+    def save_block(index):
+        def hook(module, inputs, output, index=index):
+            captured[index] = output[0].detach()
+
+        return hook
+
+    handles = [
+        model.transformer.h[index].register_forward_hook(save_block(index))
+        for index in (0, 5, 11)
+    ]
+    out = model(row, output_hidden_states=True)
+    for handle in handles:
+        handle.remove()
+    hidden = out.hidden_states
+    if len(hidden) != model.config.n_layer + 1:
+        raise SystemExit(f"expected the embedding and ln_f around the blocks; got {len(hidden)}")
+    if not torch.equal(captured[0], hidden[1]):
+        raise SystemExit("block 0 hook does not match hidden_states[1]")
+    if not torch.equal(captured[5], hidden[6]):
+        raise SystemExit("block 5 hook does not match hidden_states[6]")
+    return {
+        "embed": hidden[0][0],
+        "block0": captured[0][0],
+        "block5": captured[5][0],
+        "block11": captured[11][0],
+        "ln_f": hidden[-1][0],
+        "logits": out.logits[0, -1],
     }
 
 
@@ -56,6 +90,8 @@ def main() -> None:
     tokenizer = GPT2Tokenizer.from_pretrained(MODEL_DIR)
     model = GPT2LMHeadModel.from_pretrained(MODEL_DIR, attn_implementation="eager")
     model.eval()
+    model64 = GPT2LMHeadModel.from_pretrained(MODEL_DIR, attn_implementation="eager").double()
+    model64.eval()
     for block in model.transformer.h:
         if type(block.attn) is not GPT2Attention:
             raise SystemExit(f"expected eager attention, got {type(block.attn).__name__}")
@@ -64,30 +100,11 @@ def main() -> None:
         for text in PROMPTS:
             ids = tokenizer.encode(text)
             row = torch.tensor([ids])
-            captured = {}
-
-            def save_block(index):
-                def hook(module, inputs, output, index=index):
-                    captured[index] = output[0].detach()
-
-                return hook
-
-            handles = [
-                model.transformer.h[index].register_forward_hook(save_block(index))
-                for index in (0, 5, 11)
-            ]
-            out = model(row, output_hidden_states=True)
-            for handle in handles:
-                handle.remove()
-            hidden = out.hidden_states
-            if len(hidden) != model.config.n_layer + 1:
-                raise SystemExit(f"expected the embedding and ln_f around the blocks; got {len(hidden)}")
-            if not torch.equal(captured[0], hidden[1]):
-                raise SystemExit("block 0 hook does not match hidden_states[1]")
-            if not torch.equal(captured[5], hidden[6]):
-                raise SystemExit("block 5 hook does not match hidden_states[6]")
-            logits = out.logits[0, -1]
+            fp32 = forward_stages(model, ids)
+            f64 = forward_stages(model64, ids)
+            logits = fp32["logits"]
             top_v, top_i = torch.topk(logits, TOP)
+            logits64 = f64["logits"].detach().to(dtype=torch.float64).cpu()
             steps = []
             running = list(ids)
             for _ in range(MAX_NEW):
@@ -115,12 +132,12 @@ def main() -> None:
                     "top_logits": [
                         {"i": int(i), "v": float(v)} for i, v in zip(top_i.tolist(), top_v.tolist())
                     ],
+                    "top_logits_f64": [
+                        {"i": int(i), "v": float(logits64[i])} for i in top_i.tolist()
+                    ],
                     "stages": {
-                        "embed": summarize(hidden[0][0]),
-                        "block0": summarize(captured[0][0]),
-                        "block5": summarize(captured[5][0]),
-                        "block11": summarize(captured[11][0]),
-                        "ln_f": summarize(hidden[-1][0]),
+                        name: summarize(fp32[name], f64[name])
+                        for name in ("embed", "block0", "block5", "block11", "ln_f")
                     },
                 }
             )
@@ -129,6 +146,7 @@ def main() -> None:
         "transformers": "4.46.3",
         "attention": "eager",
         "dtype": "fp32",
+        "float64_reference": "last_row_f64",
         "max_new_tokens": MAX_NEW,
         "prompts": cases,
     }
