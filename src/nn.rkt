@@ -17,7 +17,9 @@
          "tensor.rkt")
 
 (provide matmul
+         matmul-column-block
          matmul-transposed-b
+         matmul-transposed-block
          softmax
          layer-norm
          layernorm-eps
@@ -78,8 +80,9 @@
      (for ([job (in-list jobs)] #:when job)
        (touch job))]))
 
-;; y[i, j] = b[j] + sum_k x[i, k] * W[k, j], for i in [i0, i1) and j in [j0, j1).
-(define (fill-matmul! y x W b in out i0 i1 j0 j1)
+;; y[i, j] = b[j] + sum_k x[i, k] * W[k, col0 + j].
+;; W's rows are w-stride apart. A contiguous W has w-stride = out and col0 = 0.
+(define (fill-matmul! y x W b in out i0 i1 j0 j1 w-stride col0)
   (let loop-i ([i i0])
     (unless (unsafe-fx= i i1)
       (define ybase (unsafe-fx* i out))
@@ -102,7 +105,7 @@
       (let loop-k ([k 0])
         (unless (unsafe-fx= k in)
           (define xik (unsafe-flvector-ref x (unsafe-fx+ xbase k)))
-          (define wbase (unsafe-fx* k out))
+          (define wbase (unsafe-fx+ col0 (unsafe-fx* k w-stride)))
           (let loop-j ([j j0])
             (define j4 (unsafe-fx+ j 4))
             (cond
@@ -161,16 +164,55 @@
   (define bdata (tensor-data b))
   (cond
     [(not (parallel-work? n in out))
-     (fill-matmul! y xdata wdata bdata in out 0 n 0 out)]
+     (fill-matmul! y xdata wdata bdata in out 0 n 0 out out 0)]
     [(fx>= n parallel-axis-threshold)
      (for-parallel-blocks n
        (lambda (i0 i1)
-         (fill-matmul! y xdata wdata bdata in out i0 i1 0 out)))]
+         (fill-matmul! y xdata wdata bdata in out i0 i1 0 out out 0)))]
     [else
      (for-parallel-blocks out
        (lambda (j0 j1)
-         (fill-matmul! y xdata wdata bdata in out 0 n j0 j1)))])
+         (fill-matmul! y xdata wdata bdata in out 0 n j0 j1 out 0)))])
   (make-tensor (list n out) y))
+
+;; The same product, reading columns [col, col+width) of a wider W and
+;; only the leading (tensor columns of x) rows. Attention uses this so a
+;; head does not copy its key or value prefix out of the cache.
+(define (matmul-column-block x W b col width)
+  (define-values (n in xdata) (require-matrix 'matmul-column-block x))
+  (define-values (w-rows w-cols wdata) (require-matrix 'matmul-column-block W))
+  (unless (and (exact-nonnegative-integer? col)
+               (exact-positive-integer? width)
+               (<= (+ col width) w-cols)
+               (<= in w-rows))
+    (raise-arguments-error 'matmul-column-block
+                           "column block is outside W"
+                           "x" (dims->string (tensor-dims x))
+                           "W" (dims->string (tensor-dims W))
+                           "col" col
+                           "width" width))
+  (unless (tensor? b)
+    (raise-argument-error 'matmul-column-block "tensor?" b))
+  (define bdims (tensor-dims b))
+  (unless (and (fx= (length bdims) 1) (fx= (car bdims) width))
+    (raise-arguments-error 'matmul-column-block
+                           "bias length does not match the column block"
+                           "bias" (dims->string bdims)
+                           "width" width))
+  (define y (make-flvector (fx* n width)))
+  (define bdata (tensor-data b))
+  (cond
+    [(not (parallel-work? n in width))
+     (fill-matmul! y xdata wdata bdata in width 0 n 0 width w-cols col)]
+    [(fx>= n parallel-axis-threshold)
+     (for-parallel-blocks n
+       (lambda (i0 i1)
+         (fill-matmul! y xdata wdata bdata in width i0 i1 0 width w-cols col)))]
+    [else
+     (for-parallel-blocks width
+       (lambda (j0 j1)
+         (fill-matmul! y xdata wdata bdata in width 0 n j0 j1 w-cols col)))])
+  (make-tensor (list n width) y))
 
 (define (dot-row h hbase W wbase in)
   (let loop-k ([k 0] [sum 0.0])
@@ -181,9 +223,9 @@
                             (unsafe-fl* (unsafe-flvector-ref h (unsafe-fx+ hbase k))
                                         (unsafe-flvector-ref W (unsafe-fx+ wbase k))))))))
 
-;; y[i, j] = sum_k h[i, k] * W[j, k], W stored [out, in].
-;; i is in [i0, i1) and j is in [j0, j1).
-(define (fill-transposed! y h W in out i0 i1 j0 j1)
+;; y[i, j] = sum_k h[i, k] * W[j, col0 + k].
+;; W rows are row-stride apart. A contiguous W has row-stride = in and col0 = 0.
+(define (fill-transposed! y h W in out row-stride col0 i0 i1 j0 j1)
   (let loop-i ([i i0])
     (unless (unsafe-fx= i i1)
       (define ybase (unsafe-fx* i out))
@@ -193,17 +235,17 @@
         (cond
           [(unsafe-fx<= j4 j1)
            (unsafe-flvector-set! y (unsafe-fx+ ybase j)
-                                 (dot-row h hbase W (unsafe-fx* j in) in))
+                                 (dot-row h hbase W (unsafe-fx+ col0 (unsafe-fx* j row-stride)) in))
            (unsafe-flvector-set! y (unsafe-fx+ ybase (unsafe-fx+ j 1))
-                                 (dot-row h hbase W (unsafe-fx* (unsafe-fx+ j 1) in) in))
+                                 (dot-row h hbase W (unsafe-fx+ col0 (unsafe-fx* (unsafe-fx+ j 1) row-stride)) in))
            (unsafe-flvector-set! y (unsafe-fx+ ybase (unsafe-fx+ j 2))
-                                 (dot-row h hbase W (unsafe-fx* (unsafe-fx+ j 2) in) in))
+                                 (dot-row h hbase W (unsafe-fx+ col0 (unsafe-fx* (unsafe-fx+ j 2) row-stride)) in))
            (unsafe-flvector-set! y (unsafe-fx+ ybase (unsafe-fx+ j 3))
-                                 (dot-row h hbase W (unsafe-fx* (unsafe-fx+ j 3) in) in))
+                                 (dot-row h hbase W (unsafe-fx+ col0 (unsafe-fx* (unsafe-fx+ j 3) row-stride)) in))
            (loop-j j4)]
           [(unsafe-fx< j j1)
            (unsafe-flvector-set! y (unsafe-fx+ ybase j)
-                                 (dot-row h hbase W (unsafe-fx* j in) in))
+                                 (dot-row h hbase W (unsafe-fx+ col0 (unsafe-fx* j row-stride)) in))
            (loop-j (unsafe-fx+ j 1))]))
       (loop-i (unsafe-fx+ i 1)))))
 
@@ -218,16 +260,44 @@
   (define y (make-flvector (fx* n out)))
   (cond
     [(not (parallel-work? n in out))
-     (fill-transposed! y hdata wdata in out 0 n 0 out)]
+     (fill-transposed! y hdata wdata in out in 0 0 n 0 out)]
     [(fx>= n parallel-axis-threshold)
      (for-parallel-blocks n
        (lambda (i0 i1)
-         (fill-transposed! y hdata wdata in out i0 i1 0 out)))]
+         (fill-transposed! y hdata wdata in out in 0 i0 i1 0 out)))]
     [else
      (for-parallel-blocks out
        (lambda (j0 j1)
-         (fill-transposed! y hdata wdata in out 0 n j0 j1)))])
+         (fill-transposed! y hdata wdata in out in 0 0 n j0 j1)))])
   (make-tensor (list n out) y))
+
+;; h[n, width] · K[0:rows, col:col+width)^T, K stored [capacity, stride].
+(define (matmul-transposed-block h W rows col)
+  (define-values (n in hdata) (require-matrix 'matmul-transposed-block h))
+  (define-values (w-rows w-cols wdata) (require-matrix 'matmul-transposed-block W))
+  (unless (and (exact-positive-integer? rows)
+               (<= rows w-rows)
+               (exact-nonnegative-integer? col)
+               (<= (+ col in) w-cols))
+    (raise-arguments-error 'matmul-transposed-block
+                           "column block is outside W"
+                           "h" (dims->string (tensor-dims h))
+                           "W" (dims->string (tensor-dims W))
+                           "rows" rows
+                           "col" col))
+  (define y (make-flvector (fx* n rows)))
+  (cond
+    [(not (parallel-work? n in rows))
+     (fill-transposed! y hdata wdata in rows w-cols col 0 n 0 rows)]
+    [(fx>= n parallel-axis-threshold)
+     (for-parallel-blocks n
+       (lambda (i0 i1)
+         (fill-transposed! y hdata wdata in rows w-cols col i0 i1 0 rows)))]
+    [else
+     (for-parallel-blocks rows
+       (lambda (j0 j1)
+         (fill-transposed! y hdata wdata in rows w-cols col 0 n j0 j1)))])
+  (make-tensor (list n rows) y))
 
 (define (softmax t)
   (unless (tensor? t)
