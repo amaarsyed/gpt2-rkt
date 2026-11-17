@@ -232,12 +232,23 @@
 
 (define (dot-row h hbase W wbase in)
   (let loop-k ([k 0] [sum 0.0])
-    (if (unsafe-fx= k in)
-        sum
-        (loop-k (unsafe-fx+ k 1)
-                (unsafe-fl+ sum
-                            (unsafe-fl* (unsafe-flvector-ref h (unsafe-fx+ hbase k))
-                                        (unsafe-flvector-ref W (unsafe-fx+ wbase k))))))))
+    (cond
+      [(unsafe-fx<= (unsafe-fx+ k 4) in)
+       (define hi (unsafe-fx+ hbase k))
+       (define wi (unsafe-fx+ wbase k))
+       (define s0 (unsafe-fl+ sum (unsafe-fl* (unsafe-flvector-ref h hi) (unsafe-flvector-ref W wi))))
+       (define s1 (unsafe-fl+ s0 (unsafe-fl* (unsafe-flvector-ref h (unsafe-fx+ hi 1))
+                                          (unsafe-flvector-ref W (unsafe-fx+ wi 1)))))
+       (define s2 (unsafe-fl+ s1 (unsafe-fl* (unsafe-flvector-ref h (unsafe-fx+ hi 2))
+                                          (unsafe-flvector-ref W (unsafe-fx+ wi 2)))))
+       (define s3 (unsafe-fl+ s2 (unsafe-fl* (unsafe-flvector-ref h (unsafe-fx+ hi 3))
+                                          (unsafe-flvector-ref W (unsafe-fx+ wi 3)))))
+       (loop-k (unsafe-fx+ k 4) s3)]
+      [(unsafe-fx< k in)
+       (loop-k (unsafe-fx+ k 1)
+               (unsafe-fl+ sum (unsafe-fl* (unsafe-flvector-ref h (unsafe-fx+ hbase k))
+                                           (unsafe-flvector-ref W (unsafe-fx+ wbase k)))))]
+      [else sum])))
 
 ;; y[i, j] = sum_k h[i, k] * W[j, col0 + k].
 ;; W rows are row-stride apart. A contiguous W has row-stride = in and col0 = 0.

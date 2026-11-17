@@ -96,6 +96,17 @@
           (fl+ acc (fl* (flvector-ref h (+ (* i in) k))
                         (flvector-ref W (+ (* j in) k))))))))
 
+  (test-case "transposed products handle empty, short, and unrolled row tails"
+    (for ([inner (in-list '(0 1 3 4 7 64 768))])
+      (define h (make-flvector (* 3 inner)))
+      (define W (make-flvector (* 5 inner)))
+      (for ([i (in-range (flvector-length h))])
+        (flvector-set! h i (/ (real->double-flonum (- (remainder i 11) 5)) 7.0)))
+      (for ([i (in-range (flvector-length W))])
+        (flvector-set! W i (/ (real->double-flonum (- (remainder i 13) 6)) 9.0)))
+      (check-close (matmul-transposed-b (make-tensor (list 3 inner) h) (make-tensor (list 5 inner) W))
+                   (apply append (naive-transposed 3 inner 5 h W)) 1e-12)))
+
   (test-case "a prime output width matches a naive loop"
     ;; 1031 is prime, so a column split wider than 4 still has a ×4 tail.
     ;; W[k, j] depends on both indexes, which a constant row would hide.
