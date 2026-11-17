@@ -65,7 +65,7 @@ racket bench/harness.rkt
 
 `gpt2-attention` is one GPT-2 block's attention. `c_attn` is a Conv1D to `[n, 3*d]`, split on the last axis into `q`, `k`, and `v`. Head `h` is columns `[h*d-head, (h+1)*d-head)`, not an interleaved stride. Scores are dotted per head, scaled by `1/sqrt(d-head)` (so `1/8` when the head is 64), and a key strictly after the query is `-inf.0` before the stable softmax. The heads are merged and passed through `c_proj`.
 
-`k` and `v` may be longer than `q`. Query row `i` is at position `rows(k) - rows(q) + i`, which is the same alignment as a past-key prefix: the new queries see the cached keys and not a later query in the same chunk. `attend` takes `#:kv-rows` so a buffer allocated to `n_positions` is not treated as a full sequence. The model writes each new key and value row into that buffer.
+`k` and `v` may be longer than `q`. Query row `i` is at position `rows(k) - rows(q) + i`, which is the same alignment as a past-key prefix: the new queries see the cached keys and not a later query in the same chunk. `attend` takes `#:kv-rows` so a buffer allocated to `n_positions` is not treated as a full sequence. The model writes each new key and value row into that buffer. A head reads its columns from the filled prefix with a column offset, so the prefix is not copied on every token.
 
 ## Transformer block
 
