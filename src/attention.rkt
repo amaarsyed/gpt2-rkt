@@ -19,6 +19,7 @@
 
 (provide qkv-split
          attention-scale
+         apply-causal-mask!
          causal-scores
          attend
          gpt2-attention)
