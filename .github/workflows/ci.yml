@@ -23,6 +23,9 @@ jobs:
           variant: CS
           version: "9.3"
 
+      - name: Fetch pinned BPE files
+        run: sh tools/fetch-gpt2-vocab.sh
+
       - name: Run tests
         run: raco test .
 
