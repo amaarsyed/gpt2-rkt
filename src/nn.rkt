@@ -80,6 +80,18 @@
      (for ([job (in-list jobs)] #:when job)
        (touch job))]))
 
+;; All four matrix products use the same row/column split.
+(define (for-matmul-blocks n in out proc)
+  (cond
+    [(not (parallel-work? n in out))
+     (proc 0 n 0 out)]
+    [(fx>= n parallel-axis-threshold)
+     (for-parallel-blocks n
+       (lambda (i0 i1) (proc i0 i1 0 out)))]
+    [else
+     (for-parallel-blocks out
+       (lambda (j0 j1) (proc 0 n j0 j1)))]))
+
 ;; y[i, j] = b[j] + sum_k x[i, k] * W[k, col0 + j].
 ;; W's rows are w-stride apart. A contiguous W has w-stride = out and col0 = 0.
 (define (fill-matmul! y x W b in out i0 i1 j0 j1 w-stride col0)
@@ -162,17 +174,9 @@
                            "W" (dims->string (tensor-dims W))))
   (define y (make-flvector (fx* n out)))
   (define bdata (tensor-data b))
-  (cond
-    [(not (parallel-work? n in out))
-     (fill-matmul! y xdata wdata bdata in out 0 n 0 out out 0)]
-    [(fx>= n parallel-axis-threshold)
-     (for-parallel-blocks n
-       (lambda (i0 i1)
-         (fill-matmul! y xdata wdata bdata in out i0 i1 0 out out 0)))]
-    [else
-     (for-parallel-blocks out
-       (lambda (j0 j1)
-         (fill-matmul! y xdata wdata bdata in out 0 n j0 j1 out 0)))])
+  (for-matmul-blocks n in out
+    (lambda (i0 i1 j0 j1)
+      (fill-matmul! y xdata wdata bdata in out i0 i1 j0 j1 out 0)))
   (make-tensor (list n out) y))
 
 ;; The same product, reading columns [col, col+width) of a wider W and
@@ -201,17 +205,9 @@
                            "width" width))
   (define y (make-flvector (fx* n width)))
   (define bdata (tensor-data b))
-  (cond
-    [(not (parallel-work? n in width))
-     (fill-matmul! y xdata wdata bdata in width 0 n 0 width w-cols col)]
-    [(fx>= n parallel-axis-threshold)
-     (for-parallel-blocks n
-       (lambda (i0 i1)
-         (fill-matmul! y xdata wdata bdata in width i0 i1 0 width w-cols col)))]
-    [else
-     (for-parallel-blocks width
-       (lambda (j0 j1)
-         (fill-matmul! y xdata wdata bdata in width 0 n j0 j1 w-cols col)))])
+  (for-matmul-blocks n in width
+    (lambda (i0 i1 j0 j1)
+      (fill-matmul! y xdata wdata bdata in width i0 i1 j0 j1 w-cols col)))
   (make-tensor (list n width) y))
 
 (define (dot-row h hbase W wbase in)
@@ -258,17 +254,9 @@
                            "h" (dims->string (tensor-dims h))
                            "W" (dims->string (tensor-dims W))))
   (define y (make-flvector (fx* n out)))
-  (cond
-    [(not (parallel-work? n in out))
-     (fill-transposed! y hdata wdata in out in 0 0 n 0 out)]
-    [(fx>= n parallel-axis-threshold)
-     (for-parallel-blocks n
-       (lambda (i0 i1)
-         (fill-transposed! y hdata wdata in out in 0 i0 i1 0 out)))]
-    [else
-     (for-parallel-blocks out
-       (lambda (j0 j1)
-         (fill-transposed! y hdata wdata in out in 0 0 n j0 j1)))])
+  (for-matmul-blocks n in out
+    (lambda (i0 i1 j0 j1)
+      (fill-transposed! y hdata wdata in out in 0 i0 i1 j0 j1)))
   (make-tensor (list n out) y))
 
 ;; h[n, width] · K[0:rows, col:col+width)^T, K stored [capacity, stride].
@@ -286,17 +274,9 @@
                            "rows" rows
                            "col" col))
   (define y (make-flvector (fx* n rows)))
-  (cond
-    [(not (parallel-work? n in rows))
-     (fill-transposed! y hdata wdata in rows w-cols col 0 n 0 rows)]
-    [(fx>= n parallel-axis-threshold)
-     (for-parallel-blocks n
-       (lambda (i0 i1)
-         (fill-transposed! y hdata wdata in rows w-cols col i0 i1 0 rows)))]
-    [else
-     (for-parallel-blocks rows
-       (lambda (j0 j1)
-         (fill-transposed! y hdata wdata in rows w-cols col 0 n j0 j1)))])
+  (for-matmul-blocks n in rows
+    (lambda (i0 i1 j0 j1)
+      (fill-transposed! y hdata wdata in rows w-cols col i0 i1 j0 j1)))
   (make-tensor (list n rows) y))
 
 (define (softmax t)
