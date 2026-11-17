@@ -6,6 +6,7 @@ Defects found while building gpt2-rkt. Add one row per bug.
 | --- | --- | --- | --- | --- |
 | `generate --prompt -h` printed help instead of storing the prompt | `parse-generate-args` treated `-h` and `--help` as help anywhere in the argument list, including option values | Help flags count only in flag position. The following argument is the value | `95b5ea2` | `tests/cli.rkt`: "help flags in value position are values" |
 | A value beginning with `--` was rejected as a missing flag value | `take-option` refused the next argument when it matched `^--` | The next argument is the value, including text that starts with `-` | `95b5ea2` | `tests/cli.rkt`: "help flags in value position are values" |
+| A softmax row that contains `+inf.0` is all NaN | The max-subtract step computes `+inf.0 - +inf.0`, which is NaN, and `exp` of that stays NaN | Positions equal to `+inf.0` share the row equally and every other position is 0 | `6e4b4a5` | `tests/nn.rkt`: "softmax stays finite when a row contains +inf" |
 
 ## Anticipated risks verified
 
