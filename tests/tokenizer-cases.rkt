@@ -25,13 +25,31 @@
   (define (read-asset-digests path)
     (call-with-input-file path
       (lambda (in)
-        (for/hash ([line (in-lines in)])
+        (for/hash ([line (in-lines in)]
+                   #:unless (string=? (string-trim line) ""))
           (define parts (string-split line))
           (unless (= (length parts) 2)
             (error 'tokenizer-cases "malformed digest line: ~a" line))
           (values (cadr parts) (string-downcase (car parts)))))))
 
   (define digests (read-asset-digests assets-path))
+
+  (test-case "digest lines may be blank"
+    (define path (make-temporary-file "gpt2-digests-~a"))
+    (dynamic-wind
+     void
+     (lambda ()
+       (call-with-output-file path
+         (lambda (out)
+           (displayln "" out)
+           (displayln "abc vocab.json" out)
+           (displayln "   " out)
+           (displayln "def merges.txt" out))
+         #:exists 'truncate)
+       (define digests (read-asset-digests path))
+       (check-equal? (hash-ref digests "vocab.json") "abc")
+       (check-equal? (hash-ref digests "merges.txt") "def"))
+     (lambda () (delete-file path))))
 
   (test-case "pinned BPE files match the published digests"
     (check-equal? (sha256-file vocab-path) (hash-ref digests "vocab.json"))
