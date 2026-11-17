@@ -108,6 +108,37 @@
                                           (make-tensor (list out in) tied)))
       (check-equal? (elements logits) (apply append (naive-transposed n in out x tied)))))
 
+  (test-case "a one-row query reads a tall cache by column offset"
+    ;; n = 1 is below the row split, and 1×64×3000 flops is above the
+    ;; parallel threshold, so two or more processors take the column branch.
+    (define rows 3000)
+    (define stride 128)
+    (define width 64)
+    (define col 64)
+    (define h-data (make-flvector width))
+    (for ([k (in-range width)])
+      (flvector-set! h-data k (exact->inexact (remainder k 7))))
+    (define w-data (make-flvector (* rows stride)))
+    (for ([r (in-range rows)])
+      (for ([c (in-range stride)])
+        (flvector-set! w-data (+ (* r stride) c)
+                       (exact->inexact (remainder (+ (* r 3) c) 11)))))
+    (define h (make-tensor (list 1 width) h-data))
+    (define W (make-tensor (list rows stride) w-data))
+    (define block (matmul-transposed-block h W rows col))
+    (define sliced (slice-cols W col (+ col width)))
+    (check-equal? (tensor-dims block) (list 1 rows))
+    (check-equal? (elements block)
+                  (elements (matmul-transposed-b h sliced)))
+    (check-equal? (tensor-ref block 0 0)
+                  (for/fold ([sum 0.0]) ([k (in-range width)])
+                    (fl+ sum (fl* (flvector-ref h-data k)
+                                  (flvector-ref w-data (+ col k))))))
+    (check-equal? (tensor-ref block 0 (sub1 rows))
+                  (for/fold ([sum 0.0]) ([k (in-range width)])
+                    (fl+ sum (fl* (flvector-ref h-data k)
+                                  (flvector-ref w-data (+ (* (sub1 rows) stride) col k)))))))
+
   (test-case "parallel matmul matches the integer formula"
     (define dim 64)
     (define x-data (make-flvector (* dim dim)))
