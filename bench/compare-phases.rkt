@@ -35,15 +35,21 @@
 (define (timed thunk result->ids runs)
   (define warm (result->ids (thunk)))
   (collect-garbage)
+  (define allocated '())
+  (define gc-times '())
   (define samples
     (for/list ([_ (in-range runs)])
+      (define bytes (current-memory-use 'cumulative))
+      (define gc (current-gc-milliseconds))
       (define start (current-inexact-monotonic-milliseconds))
       (define result (thunk))
       (define ms (- (current-inexact-monotonic-milliseconds) start))
+      (set! allocated (cons (- (current-memory-use 'cumulative) bytes) allocated))
+      (set! gc-times (cons (- (current-gc-milliseconds) gc) gc-times))
       (unless (equal? warm (result->ids result))
         (error 'compare-phases "result changed between warmup and timed run"))
       ms))
-  (values samples warm))
+  (values samples warm (reverse allocated) (reverse gc-times)))
 
 (define (child source model-dir kind n runs smoke?)
   (define (binding module name)
@@ -57,6 +63,7 @@
   (define make-tensor (binding "tensor.rkt" 'make-tensor))
   (define tensor-data (binding "tensor.rkt" 'tensor-data))
   (define matmul (binding "nn.rkt" 'matmul))
+  (define head (binding "nn.rkt" 'matmul-transposed-b))
   (define result
     (cond
       [(equal? kind "load")
@@ -76,25 +83,30 @@
                'resident_samples_bytes (map cadr samples)
                'median_ms (median (map car samples))
                'resident_bytes (median (map cadr samples)))]
-      [(member kind '("prefill" "decode"))
+      [(member kind '("prefill" "decode" "sample"))
        (define model (load-model model-dir))
        (define base (encode (model-tokenizer model) (if smoke? "hi" prompt)))
        (define ids (if (equal? kind "prefill") (repeat-ids base n) base))
        (define count (if (equal? kind "prefill") 1 n))
        ;; No stop-at-eos override: phase 6 does not have that keyword.
        ;; Both revisions must produce the complete requested token count.
-       (define-values (samples warm)
-         (timed (lambda () (model-generate model ids count)) token-ids runs))
+       (define-values (samples warm allocated gc-times)
+         (timed (lambda ()
+                  (if (equal? kind "sample")
+                      (model-generate model ids count #:temperature 0.8 #:top-k 40 #:seed 1)
+                      (model-generate model ids count))) token-ids runs))
        (unless (= (length warm) count)
          (error 'compare-phases "generation stopped early: ~a of ~a tokens" (length warm) count))
        (hasheq 'samples_ms samples 'median_ms (median samples)
+               'samples_allocated_bytes allocated 'samples_gc_ms gc-times
                'prompt_tokens (length ids) 'new_tokens count 'ids warm)]
       [else
        (define rows (if (equal? kind "square") n 1))
        (define in (if smoke? 16 768))
        (define out (if (equal? kind "square") in (if smoke? 97 50257)))
        (define x (make-tensor (list rows in) (make-flvector (* rows in) 1.0)))
-       (define W (make-tensor (list in out) (make-flvector (* in out) 1.0)))
+       (define W (make-tensor (if (equal? kind "head") (list out in) (list in out))
+                              (make-flvector (* in out) 1.0)))
        (define b (make-tensor (list out) (make-flvector out 0.0)))
        (define (check result)
          (define data (tensor-data result))
@@ -102,8 +114,10 @@
                       (= (flvector-ref data (sub1 (flvector-length data))) in))
            (error 'compare-phases "matrix product did not match"))
          #t)
-       (define-values (samples _) (timed (lambda () (matmul x W b)) check runs))
+       (define-values (samples _ allocated gc-times)
+         (timed (lambda () (if (equal? kind "head") (head x W) (matmul x W b))) check runs))
        (hasheq 'samples_ms samples 'median_ms (median samples)
+               'samples_allocated_bytes allocated 'samples_gc_ms gc-times
                'rows rows 'inner in 'cols out)]))
   (hash-set (hash-set result 'peak_bytes (current-memory-use 'peak)) 'pid (getpid)))
 
@@ -227,7 +241,7 @@
   (unless (exact-positive-integer? runs) (error 'compare-phases "runs must be positive"))
   (cond
     [kind
-     (unless (and source (member kind '("load" "prefill" "decode" "square" "logits")))
+     (unless (and source (member kind '("load" "prefill" "decode" "sample" "square" "logits" "head")))
        (error 'compare-phases "invalid child configuration"))
      (write-json (child source model-dir kind size runs smoke?))
      (newline)]
