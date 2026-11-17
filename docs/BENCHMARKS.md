@@ -12,8 +12,8 @@ Recorded 2026-11-17. Windows runs use Racket CS 9.3, Ryzen 5 8645HS, 12 logical 
 | Prefill 512 | 6507.507 ms | 6288.714 ms |
 | Prefill 1000 | 14299.251 ms | 15463.771 ms |
 | Generate 128 | 6355.449 ms | 5835.142 ms |
-| Matmul 768×768×768 | 31.930 ms | 30.538 ms | -4.4% |
-| Matmul 1×768×50257 | 7.088 ms | 7.812 ms | +10.2% |
+| Matmul 768×768×768 | 31.930 ms | 30.538 ms |
+| Matmul 1×768×50257 | 7.088 ms | 7.812 ms |
 
 Greedy: 20.14 → 21.94 tok/s. Sequential runs, one warmup and three timed calls per workload; matching token IDs. The row-shaped matmul is biased Conv1D, not the tied head.
 
@@ -68,7 +68,7 @@ Screening medians in ms, one warmup and seven timed calls; sequential trials.
 | 768×768×768 | 32.117 | 29.486 | 35.252 | 31.494 |
 | 1×768×50257 (tied head) | 7.246 | 7.088 | 8.445 | 7.864 |
 
-[Hypotheses, decisions, commits, and raw samples](PHASE8-EXPERIMENTS.md). Phase 8 retained scheduler changes; phase 9 rejected both head rewrites.
+[Hypotheses, decisions, commits, and raw samples](PHASE8-EXPERIMENTS.md). Retained scheduler changes; rejected register and four-row kernels.
 
 ## Phase 9 kernel trials
 
@@ -83,7 +83,7 @@ Screening medians in ms, one warmup and seven timed calls; sequential trials.
 | 768×768×768 | 31.243 | 38.187 | 33.882 |
 | 1×768×50257 (tied head) | 6.755 | 17.832 | 7.427 |
 
-[Hypotheses, decisions, commits, and raw samples](PHASE9-EXPERIMENTS.md). Phase 8 retained scheduler changes; phase 9 rejected both head rewrites.
+[Hypotheses, decisions, commits, and raw samples](PHASE9-EXPERIMENTS.md). Rejected both head rewrites.
 
 ## Phase 9 head follow-ups
 
