@@ -1,34 +1,29 @@
 # Changelog
 
-## Unreleased
-
-- Read packed query rows and write key/value projections straight to cache.
-- Add optional NN matrix-worker budgets, leaving the host-count default intact.
-- Record phase 9 head experiments, worker screening, and baseline comparison.
-
-- Use one future block per processor for matrix products.
-- Compute only visible causal attention, with request-owned score storage.
-- Size generation caches to the prompt and requested output length.
-- Reuse fresh product buffers for GELU and residual additions.
-- Select top-k IDs with a bounded heap, preserving lower IDs on ties.
-- Add alternating baseline/phase 8 measurements and timed allocation counts.
-
 ## 0.1.0
 
-Pure-Racket GPT-2 Small inference on Racket CS. Published numbers for a
-machine come from `sh bench/run.sh` on that machine.
+GPT-2 Small inference in pure Racket, on Racket CS. This is the version of the tree in the repository, including the cache and kernel work below. Numbers for a machine come from `sh bench/run.sh` on that machine.
 
 ### Added
 
-- GPT-2 byte-level BPE, embeddings, causal attention, a pre-LN block, and greedy, temperature, and top-k generation.
+- GPT-2 byte-level BPE, embeddings, causal attention, a pre-norm block, and greedy, temperature, and top-k generation.
 - A safetensors loader for the pinned GPT-2 Small weights, including bare Hugging Face names, an unaligned header, and a tied `lm_head.weight`.
 - `sh bench/run.sh`, which checks the pinned files and writes load, prefill, decode, and matmul results for the host.
 - Release notes in `docs/RELEASE-v0.1.0.md`.
+
+### Changed
+
+- Matrix products use one future block per processor.
+- Attention computes only the visible causal keys, with a score row owned by the request.
+- Generation caches are sized to the prompt plus the requested output, and `next-token-logits` allocates only the prompt.
+- Cached blocks read the packed query and write key and value rows straight into the cache.
+- GELU and residual additions reuse the product buffer they just allocated.
+- Top-k selects ids with a bounded heap and keeps the lower id on a tie.
+- Matrix products take an optional worker budget. The default is still the host's processor count.
 
 ### Fixed
 
 - The benchmark reads resident memory after a collection, so the weight-file buffer is not part of that figure. `load-model` itself does not collect.
 - Attention reads each head from the key and value cache in place.
-- `next-token-logits` allocates a cache for the prompt, not the whole position table.
 - A cache handle cannot be advanced twice.
-- The eager check compares every channel of the last row with a float64 reference, beside the fp32 plan bar.
+- The eager check compares every channel of the last row with a float64 reference, beside the fp32 tolerance.
