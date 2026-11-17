@@ -108,4 +108,18 @@
        (check-false (hash-has-key? tensors "h.0.attn.bias"))
        (check-equal? (elements (hash-ref tensors "wte.weight")) '(4.5)))
      (lambda () (delete-file path))))
+
+  (test-case "an empty shape is a gpt2 error that names the tensor"
+    (define header
+      #"{\"scalar\":{\"dtype\":\"F32\",\"shape\":[],\"data_offsets\":[0,4]}}")
+    (define path (write-file header (real->floating-point-bytes 1.0 4 #f)))
+    (dynamic-wind
+     void
+     (lambda ()
+       (check-exn
+        (lambda (e)
+          (and (exn:fail:gpt2? e)
+               (regexp-match? #rx"shape is invalid: scalar" (exn-message e))))
+        (lambda () (read-safetensors path))))
+     (lambda () (delete-file path))))
   )

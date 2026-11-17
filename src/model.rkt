@@ -390,9 +390,17 @@
     (define vocab (config-int cfg 'vocab_size #f))
     (unless (and n-layer n-embd n-head n-positions vocab)
       (raise-gpt2 "config.json is missing n_layer, n_embd, n_head, n_positions, or vocab_size"))
+    (for ([key (in-list '(n_layer n_embd n_head n_positions vocab_size))]
+          [value (in-list (list n-layer n-embd n-head n-positions vocab))])
+      (unless (if (eq? key 'n_layer) (>= value 0) (> value 0))
+        (raise-gpt2
+         (format "config ~a must be ~a integer"
+                 key (if (eq? key 'n_layer) "a nonnegative" "a positive")))))
     (unless (zero? (remainder n-embd n-head))
       (raise-gpt2 (format "n_embd ~a is not divisible by n_head ~a" n-embd n-head)))
     (define n-inner (or (config-int cfg 'n_inner #f) (* 4 n-embd)))
+    (unless (> n-inner 0)
+      (raise-gpt2 "config n_inner must be a positive integer"))
     (define tok (load-tokenizer (build-path model-dir "vocab.json")
                                 (build-path model-dir "merges.txt")))
     (define raw (read-safetensors (build-path model-dir "model.safetensors")

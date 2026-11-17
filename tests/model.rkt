@@ -367,6 +367,34 @@
        (check-equal? (flvector-length (next-token-logits model '(0))) 2))
      (lambda () (delete-directory/files dir))))
 
+  (test-case "invalid config dimensions are named before arithmetic"
+    (define cfg (read-json (open-input-string base-config)))
+    (for ([key (in-list '(n_layer n_embd n_head n_positions vocab_size n_inner))]
+          [value (in-list '(-1 0 0 0 0 0))])
+      (define dir (tiny-dir base-specs base-config))
+      (dynamic-wind
+       void
+       (lambda ()
+         (write-json-file (build-path dir "config.json") (hash-set cfg key value))
+         (check-exn
+          (lambda (e)
+            (and (exn:fail:gpt2? e)
+                 (string-contains? (exn-message e) (symbol->string key))
+                 (string-contains? (exn-message e) asset-fetch-command)))
+          (lambda () (load-model dir))))
+       (lambda () (delete-directory/files dir)))))
+
+  (test-case "a model without blocks still loads"
+    (define specs (filter (lambda (spec) (not (string-prefix? (car spec) "h."))) base-specs))
+    (define cfg (hash-set (read-json (open-input-string base-config)) 'n_layer 0))
+    (define dir (tiny-dir specs base-config))
+    (dynamic-wind
+     void
+     (lambda ()
+       (write-json-file (build-path dir "config.json") cfg)
+       (check-equal? (flvector-length (next-token-logits (load-model dir) '(0))) 2))
+     (lambda () (delete-directory/files dir))))
+
   (test-case "a transposed c_attn, a missing key, and an extra key are named"
     (define transposed
       (map (lambda (spec)
