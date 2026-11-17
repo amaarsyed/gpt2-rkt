@@ -96,6 +96,23 @@
     (check-equal? (tensor-ref probs 0 1) 0.0)
     (check-equal? (tensor-ref probs 0 0) 1.0))
 
+  (test-case "the last query row matches that row of the full attend"
+    (define nq 4)
+    (define nk 6)
+    (define d 8)
+    (define (fill n salt)
+      (define data (make-flvector n))
+      (for ([i (in-range n)])
+        (flvector-set! data i
+                       (real->double-flonum (/ (remainder (+ (* i 17) salt) 11) 5.0))))
+      data)
+    (define q (make-tensor (list nq d) (fill (* nq d) 1)))
+    (define k (make-tensor (list nk d) (fill (* nk d) 2)))
+    (define v (make-tensor (list nk d) (fill (* nk d) 3)))
+    (define full (attend q k v 2))
+    (define one (attend (slice-rows q (sub1 nq) nq) k v 2))
+    (check-equal? (elements one) (elements (slice-rows full (sub1 nq) nq))))
+
   (test-case "a cached key prefix is visible to the new query"
     (define q (make-tensor '(1 1) (flvector 1.0)))
     (define k (make-tensor '(3 1) (flvector 1.0 1.0 1.0)))
