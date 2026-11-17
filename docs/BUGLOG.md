@@ -11,6 +11,8 @@ Defects found while building gpt2-rkt. Add one row per bug.
 | `src/embed.rkt` did not compile: `flvector-set!` was unbound | `racket/base` does not provide the flvector operations | Require `racket/flonum` | `f296560` | `tests/embed.rkt` |
 | The reference-id test did not compile: `system*` and `file->bytes` were unbound | `system*` is in `racket/system` and `file->bytes` is in `racket/file` | Require both modules | `21be015` | `tests/tokenizer-cases.rkt` |
 | The source guard would have failed on the pre-tokenizer comment | The comment named the reference language | Describe the whitespace class without that name | `3199901` | CI grep over `*.rkt` files |
+| The BPE fetch script fails on a machine without `sha256sum` | The script always invoked `sha256sum`, which macOS does not ship | Use `sha256sum` when it exists, otherwise `shasum -a 256`. Digests come from `tools/gpt2-assets.sha256` | `15421c3` | `sh tools/fetch-gpt2-vocab.sh` |
+| The tokenizer fixture test spawns `sha256sum` | The digest check shelled out with `system*` | Hash the files with `sha256-bytes` and `bytes->hex-string`, reading the same digest file | `3077ca4` | `tests/tokenizer-cases.rkt`: "pinned BPE files match the published digests" |
 
 ## Anticipated risks verified
 
