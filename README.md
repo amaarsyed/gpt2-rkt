@@ -1,7 +1,14 @@
 # gpt2-rkt
 
-Pure-Racket GPT-2 Small (124M) inference. Uses flvectors and Racket futures;
-requires Racket CS 9.3. No Python or native math library at runtime.
+The GPT-2 Small (124M) inference engine is written entirely in Racket, including
+tokenization, weight loading, matrix kernels, attention, caching, and generation.
+It uses flvectors and Racket futures on Racket CS 9.3, with no Python or native
+math library at runtime.
+
+Supporting scripts use Python to generate reference fixtures, PowerShell to
+coordinate Windows benchmarks, and shell to fetch assets and launch benchmarks.
+These scripts perform no inference; the repository contains multiple languages,
+but the engine is pure Racket.
 
 ## Run
 
