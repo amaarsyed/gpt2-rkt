@@ -222,9 +222,7 @@
     (define gain (make-tensor '(2) (flvector 1.5 0.5)))
     (define bias (make-tensor '(2) (flvector 0.2 -0.3)))
     (check-equal? (elements (gpt2-blocks x (list b1 b2))) (elements mid))
-    (check-equal? (elements (gpt2-ln-f mid gain bias))
-                  (elements (layer-norm mid gain bias)))
-    (check-equal? (elements (gpt2-ln-f (gpt2-blocks x (list b1 b2)) gain bias))
+    (check-equal? (elements (layer-norm (gpt2-blocks x (list b1 b2)) gain bias))
                   (elements (layer-norm mid gain bias))))
 
   (define (flat-flonums nested)
@@ -296,7 +294,7 @@
                     (format "~a max abs error ~a" (car pair) (max-abs-error (cadr pair) (caddr pair)))))
       (set! hidden (block-trace-out trace)))
     (define stacked (gpt2-blocks (tensor-from (hash-ref fixture 'x) (list seq d)) params-list))
-    (define final (gpt2-ln-f stacked
+    (define final (layer-norm stacked
                              (tensor-from (hash-ref fixture 'ln-f-gain) (list d))
                              (tensor-from (hash-ref fixture 'ln-f-bias) (list d))))
     (define expected-final (flat-flonums (hash-ref fixture 'ln-f)))

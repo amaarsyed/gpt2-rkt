@@ -69,7 +69,7 @@ racket bench/harness.rkt
 
 ## Transformer block
 
-`gpt2-block` is pre-LN. Let `h = x + attn(ln_1(x))`. The block output is `h + mlp(ln_2(h))`. Both norms use biased variance and epsilon `1e-5`. The MLP is `c_fc` from the model width to the inner width, the tanh GELU, and `c_proj` back. For GPT-2 small those matrices are `[768, 3072]` and `[3072, 768]`. `gpt2-blocks` folds a list of blocks. `gpt2-ln-f` is the same layer norm after the stack.
+`gpt2-block` is pre-LN. Let `h = x + attn(ln_1(x))`. The block output is `h + mlp(ln_2(h))`. Both norms use biased variance and epsilon `1e-5`. The MLP is `c_fc` from the model width to the inner width, the tanh GELU, and `c_proj` back. For GPT-2 small those matrices are `[768, 3072]` and `[3072, 768]`. `gpt2-blocks` folds a list of blocks. The final norm is the same `layer-norm`.
 
 ## Tokenizer and embeddings
 
