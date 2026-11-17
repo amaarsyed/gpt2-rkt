@@ -51,7 +51,7 @@
       ms))
   (values samples warm (reverse allocated) (reverse gc-times)))
 
-(define (child source model-dir kind n runs smoke?)
+(define (child source model-dir kind n runs smoke? decode-workers prefill-workers)
   (define (binding module name)
     (dynamic-require (build-path source "src" module) name))
   (define load-model (binding "model.rkt" 'load-model))
@@ -64,6 +64,8 @@
   (define tensor-data (binding "tensor.rkt" 'tensor-data))
   (define matmul (binding "nn.rkt" 'matmul))
   (define head (binding "nn.rkt" 'matmul-transposed-b))
+  (when decode-workers ((binding "nn.rkt" 'current-decode-workers) decode-workers))
+  (when prefill-workers ((binding "nn.rkt" 'current-prefill-workers) prefill-workers))
   (define result
     (cond
       [(equal? kind "load")
@@ -222,6 +224,8 @@
   (define kind #f)
   (define size 0)
   (define runs 3)
+  (define decode-workers #f)
+  (define prefill-workers #f)
   (define date #f)
   (define cpu (host-cpu-name))
   (define smoke? #f)
@@ -233,6 +237,8 @@
    [("--child") name "Child configuration" (set! kind name)]
    [("--size") n "Child problem size" (set! size (string->number n))]
    [("--runs") n "Timed calls after one warmup" (set! runs (string->number n))]
+   [("--decode-workers") n "Single-row matrix worker budget" (set! decode-workers (string->number n))]
+   [("--prefill-workers") n "Multi-row matrix worker budget" (set! prefill-workers (string->number n))]
    [("--date") day "Report date in YYYY-MM-DD form" (set! date day)]
    [("--cpu") name "CPU model for the report" (set! cpu name)]
    [("--model-dir") path "Shared pinned model directory" (set! model-dir (path->complete-path path))]
@@ -243,7 +249,7 @@
     [kind
      (unless (and source (member kind '("load" "prefill" "decode" "sample" "square" "logits" "head")))
        (error 'compare-phases "invalid child configuration"))
-     (write-json (child source model-dir kind size runs smoke?))
+     (write-json (child source model-dir kind size runs smoke? decode-workers prefill-workers))
      (newline)]
     [else
      (unless (and date out-dir) (error 'compare-phases "--date and --out-dir are required"))

@@ -107,6 +107,20 @@
       (check-close (matmul-transposed-b (make-tensor (list 3 inner) h) (make-tensor (list 5 inner) W))
                    (apply append (naive-transposed 3 inner 5 h W)) 1e-12)))
 
+  (test-case "worker budgets preserve decode and prefill products"
+    (for ([shape (in-list '((1 128 1024) (33 64 64)))])
+      (define n (car shape))
+      (define inner (cadr shape))
+      (define out (caddr shape))
+      (define x (make-tensor (list n inner) (make-flvector (* n inner) 1.0)))
+      (define W (make-tensor (list inner out) (make-flvector (* inner out) 1.0)))
+      (define b (make-tensor (list out) (make-flvector out 0.0)))
+      (for ([workers (in-list '(1 2 999))])
+        (parameterize ([current-decode-workers workers] [current-prefill-workers workers])
+          (check-equal? (elements (matmul x W b)) (make-list (* n out) (real->double-flonum inner))))))
+    (check-exn exn:fail:contract? (lambda () (current-decode-workers 0)))
+    (check-exn exn:fail:contract? (lambda () (current-prefill-workers 1.5))))
+
   (test-case "a prime output width matches a naive loop"
     ;; 1031 is prime, so a column split wider than 4 still has a ×4 tail.
     ;; W[k, j] depends on both indexes, which a constant row would hide.

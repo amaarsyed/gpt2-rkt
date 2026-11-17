@@ -25,6 +25,8 @@
          softmax
          layer-norm
          layernorm-eps
+         current-decode-workers
+         current-prefill-workers
          gelu)
 
 (define layernorm-eps 1e-5)
@@ -33,6 +35,15 @@
 ;; more than the arithmetic. Per-head attention stays under it. The
 ;; logits multiply and the MLP stay over it.
 (define parallel-work-threshold 100000)
+
+(define (worker-budget n)
+  (unless (or (not n) (exact-positive-integer? n))
+    (raise-argument-error 'worker-budget "#f or positive integer" n))
+  n)
+
+;; #f uses the host count. Budgets apply to matrix products, not heads.
+(define current-decode-workers (make-parameter #f worker-budget))
+(define current-prefill-workers (make-parameter #f worker-budget))
 ;; Once a problem is large enough to parallelize, split rows when there
 ;; are at least this many, and output columns otherwise.
 (define parallel-axis-threshold 32)
@@ -62,12 +73,7 @@
   (define-values (rows cols) (matrix-shape who t))
   (values rows cols (tensor-data t)))
 
-(define (parallel-work? n in out)
-  (and (fx>= (processor-count) 2)
-       (>= (* n in out) parallel-work-threshold)))
-
-(define (for-parallel-blocks total proc)
-  (define cpus (processor-count))
+(define (for-parallel-blocks total cpus proc)
   (cond
     [(or (fx< cpus 2) (fx< total parallel-axis-threshold))
      (proc 0 total)]
@@ -84,14 +90,16 @@
 
 ;; All four matrix products use the same row/column split.
 (define (for-matmul-blocks n in out proc)
+  (define budget (if (= n 1) (current-decode-workers) (current-prefill-workers)))
+  (define cpus (min (or budget (processor-count)) (processor-count)))
   (cond
-    [(not (parallel-work? n in out))
+    [(or (< cpus 2) (< (* n in out) parallel-work-threshold))
      (proc 0 n 0 out)]
     [(fx>= n parallel-axis-threshold)
-     (for-parallel-blocks n
+     (for-parallel-blocks n cpus
        (lambda (i0 i1) (proc i0 i1 0 out)))]
     [else
-     (for-parallel-blocks out
+     (for-parallel-blocks out cpus
        (lambda (j0 j1) (proc 0 n j0 j1)))]))
 
 ;; y[i, j] = b[j] + sum_k x[i, k] * W[k, col0 + j].
