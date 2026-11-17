@@ -1,17 +1,18 @@
 #lang racket/base
 
 (module+ test
-  (require json
+  (require file/sha1
+           json
            racket/file
            racket/runtime-path
            racket/string
-           racket/system
            rackunit
            "../src/merges.rkt"
            "../src/tokenizer.rkt")
 
   (define-runtime-path vocab-path "../models/gpt2/vocab.json")
   (define-runtime-path merges-path "../models/gpt2/merges.txt")
+  (define-runtime-path assets-path "../tools/gpt2-assets.sha256")
   (define-runtime-path cases-path "tokenizer-cases.json")
 
   (unless (and (file-exists? vocab-path) (file-exists? merges-path))
@@ -19,20 +20,22 @@
            "missing BPE files under models/gpt2; run tools/fetch-gpt2-vocab.sh"))
 
   (define (sha256-file path)
-    (define out (open-output-string))
-    (parameterize ([current-output-port out])
-      (unless (system* (find-executable-path "sha256sum") (path->string path))
-        (error 'tokenizer-cases "sha256sum failed for ~a" path)))
-    (car (string-split (get-output-string out))))
+    (bytes->hex-string (call-with-input-file path sha256-bytes)))
 
-  (define vocab-sha256
-    "196139668be63f3b5d6574427317ae82f612a97c5d1cdaf36ed2256dbf636783")
-  (define merges-sha256
-    "1ce1664773c50f3e0cc8842619a93edc4624525b728b188a9e0be33b7726adc5")
+  (define (read-asset-digests path)
+    (call-with-input-file path
+      (lambda (in)
+        (for/hash ([line (in-lines in)])
+          (define parts (string-split line))
+          (unless (= (length parts) 2)
+            (error 'tokenizer-cases "malformed digest line: ~a" line))
+          (values (cadr parts) (string-downcase (car parts)))))))
+
+  (define digests (read-asset-digests assets-path))
 
   (test-case "pinned BPE files match the published digests"
-    (check-equal? (sha256-file vocab-path) vocab-sha256)
-    (check-equal? (sha256-file merges-path) merges-sha256))
+    (check-equal? (sha256-file vocab-path) (hash-ref digests "vocab.json"))
+    (check-equal? (sha256-file merges-path) (hash-ref digests "merges.txt")))
 
   (test-case "the published merges file still starts with #version"
     (define text (bytes->string/utf-8 (file->bytes merges-path)))
