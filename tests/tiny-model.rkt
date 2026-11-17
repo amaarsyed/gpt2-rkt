@@ -3,6 +3,7 @@
 (module+ test
   (require json
            racket/flonum
+           racket/port
            racket/runtime-path
            racket/string
            rackunit
@@ -56,7 +57,8 @@
       (define got (last-row-nums logits))
       (define full (flvector->list (next-token-logits model context)))
       (check-equal? got full)
-      (check-true (within-tolerance? got expected))
+      ;; The acceptance bar stays 1e-3 + 1e-4*|e|. Measured max abs here is 3.41e-5.
+      (check-true (within-tolerance? got expected #:abs 5e-5 #:rel 0.0))
       (check-equal? (hash-ref step 'next) (argmax-id got))
       (set! previous context))
     (check-equal? (generation-token-ids
@@ -71,10 +73,29 @@
                #:output-port out
                #:error-port err))
     (check-equal? code 0)
-    (check-equal? (get-output-string err) "")
+    (check-regexp-match #px"load-seconds: " (get-output-string err))
+    (check-regexp-match #px"tokens-per-second: " (get-output-string err))
     (check-equal? (get-output-string out)
                   (string-append
                    (generation-text
                     (model-generate model prompt-ids (hash-ref ref 'max_new_tokens)))
                    "\n")))
+
+  (test-case "tokens are written as they are chosen"
+    (define model (load-model tiny-dir))
+    (define chunks '())
+    (define port
+      (make-output-port
+       'capture
+       always-evt
+       (lambda (bstr start end non-block? breakable?)
+         (define piece (bytes->string/utf-8 (subbytes bstr start end)))
+         (unless (string=? piece "")
+           (set! chunks (cons piece chunks)))
+         (- end start))
+       void))
+    (define result (model-generate model '(104 105) 4 #:output-port port))
+    (check-true (> (length chunks) 1))
+    (check-equal? (apply string-append (reverse chunks))
+                  (generation-text result)))
   )

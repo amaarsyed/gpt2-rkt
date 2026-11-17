@@ -178,14 +178,20 @@
   (define out (flvector-copy src base (+ base count)))
   (raw-tensor (list n cols) out))
 
-(define (slice-cols t start end)
+(define (slice-cols t start end #:rows [row-limit #f])
   (check-tensor 'slice-cols t)
   (define dims (tensor-dims t))
   (unless (= (length dims) 2)
     (raise-arguments-error 'slice-cols
                            "expected a rank-2 tensor"
                            "dims" (dims->string dims)))
-  (define rows (car dims))
+  (define all-rows (car dims))
+  (define rows (or row-limit all-rows))
+  (unless (and (exact-nonnegative-integer? rows) (<= rows all-rows))
+    (raise-arguments-error 'slice-cols
+                           "row limit is past the tensor"
+                           "rows" rows
+                           "tensor rows" all-rows))
   (define cols (cadr dims))
   (check-slice 'slice-cols start end cols)
   (define width (- end start))
