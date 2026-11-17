@@ -9,6 +9,7 @@
            rackunit
            "../src/block.rkt"
            "../src/errors.rkt"
+           "../src/model-assets.rkt"
            "../src/model.rkt"
            "../src/nn.rkt"
            "../src/tensor.rkt")
@@ -231,7 +232,7 @@
      (lambda ()
        (call-with-output-file (build-path dir "config.json")
          (lambda (out)
-           (write-json (hash 'n_layer 1 'n_embd 2 'n_head 1 'vocab_size 2) out))
+           (write-json (hash 'n_layer 1 'n_embd 2 'n_head 1 'n_positions 4 'vocab_size 2) out))
          #:exists 'truncate)
        (call-with-output-file (build-path dir "vocab.json")
          (lambda (out) (write-json (hash 'a 0 'b 1) out))
@@ -258,6 +259,102 @@
           ("transformer.h.0.mlp.c_proj.weight" 8 2)
           ("transformer.h.0.mlp.c_proj.bias" 2)))
        (define model (load-model dir))
-       (check-equal? (gpt2-model-eos-id model) 50256))
+       (check-equal? (gpt2-model-eos-id model) 50256)
+       (check-equal? (gpt2-model-n-positions model) 4))
      (lambda () (delete-directory/files dir))))
+
+  (define (write-text path text)
+    (call-with-output-file path
+      (lambda (out) (display text out))
+      #:exists 'truncate))
+
+  (define (tiny-dir specs config)
+    (define dir (make-temporary-file "gpt2-rkt-~a" 'directory))
+    (write-text (build-path dir "config.json") config)
+    (write-json-file (build-path dir "vocab.json") (hash 'a 0 'b 1))
+    (write-text (build-path dir "merges.txt") "#version: 0.2\n")
+    (write-zero-safetensors (build-path dir "model.safetensors") specs)
+    dir)
+
+  (define (write-json-file path jsexpr)
+    (call-with-output-file path
+      (lambda (out) (write-json jsexpr out))
+      #:exists 'truncate))
+
+  (define base-config
+    "{\"n_layer\":1,\"n_embd\":2,\"n_head\":1,\"n_positions\":4,\"vocab_size\":2}")
+
+  (define base-specs
+    '(("wte.weight" 2 2)
+      ("wpe.weight" 4 2)
+      ("ln_f.weight" 2)
+      ("ln_f.bias" 2)
+      ("h.0.ln_1.weight" 2)
+      ("h.0.ln_1.bias" 2)
+      ("h.0.attn.c_attn.weight" 2 6)
+      ("h.0.attn.c_attn.bias" 6)
+      ("h.0.attn.c_proj.weight" 2 2)
+      ("h.0.attn.c_proj.bias" 2)
+      ("h.0.ln_2.weight" 2)
+      ("h.0.ln_2.bias" 2)
+      ("h.0.mlp.c_fc.weight" 2 8)
+      ("h.0.mlp.c_fc.bias" 8)
+      ("h.0.mlp.c_proj.weight" 8 2)
+      ("h.0.mlp.c_proj.bias" 2)
+      ("h.0.attn.bias" 1 1 1 1)))
+
+  (test-case "Hugging Face names load without a transformer prefix"
+    (define dir (tiny-dir base-specs base-config))
+    (dynamic-wind
+     void
+     (lambda ()
+       (define model (load-model dir))
+       (check-equal? (gpt2-model-n-embd model) 2)
+       (check-equal? (flvector-length (next-token-logits model '(0))) 2))
+     (lambda () (delete-directory/files dir))))
+
+  (test-case "a transposed c_attn, a missing key, and an extra key are named"
+    (define transposed
+      (map (lambda (spec)
+             (if (equal? (car spec) "h.0.attn.c_attn.weight")
+                 '("h.0.attn.c_attn.weight" 6 2)
+                 spec))
+           base-specs))
+    (define dir (tiny-dir transposed base-config))
+    (dynamic-wind
+     void
+     (lambda ()
+       (check-exn #rx"h.0.attn.c_attn.weight"
+                  (lambda () (load-model dir))))
+     (lambda () (delete-directory/files dir)))
+    (define missing (filter (lambda (spec) (not (equal? (car spec) "wte.weight"))) base-specs))
+    (define dir2 (tiny-dir missing base-config))
+    (dynamic-wind
+     void
+     (lambda ()
+       (check-exn #rx"missing tensor: wte.weight"
+                  (lambda () (load-model dir2))))
+     (lambda () (delete-directory/files dir2)))
+    (define extra (append base-specs '(("extra.weight" 2))))
+    (define dir3 (tiny-dir extra base-config))
+    (dynamic-wind
+     void
+     (lambda ()
+       (check-exn #rx"unexpected tensor: extra.weight"
+                  (lambda () (load-model dir3))))
+     (lambda () (delete-directory/files dir3))))
+
+  (test-case "a sha256 mismatch names the file and the fetch command"
+    (define path (make-temporary-file "gpt2-rkt-~a"))
+    (dynamic-wind
+     void
+     (lambda ()
+       (call-with-output-file path
+         (lambda (out) (display "corrupt" out))
+         #:exists 'truncate)
+       (check-exn #rx"sha256 mismatch"
+                  (lambda () (check-file-sha256 path "0000000000000000000000000000000000000000000000000000000000000000")))
+       (check-exn #px"sh tools/fetch-gpt2-vocab.sh"
+                  (lambda () (check-file-sha256 path "0000000000000000000000000000000000000000000000000000000000000000"))))
+     (lambda () (delete-file path))))
   )
