@@ -56,6 +56,22 @@
     (check-help '("generate" "--model-dir" "models/gpt2" "--help") #px"--temperature")
     (void))
 
+  (test-case "help flags in value position are values"
+    (define dash-h
+      (parse-generate-args '("--model-dir" "models/gpt2"
+                             "--prompt" "-h"
+                             "--max-new-tokens" "4")))
+    (check-equal? (generate-config-prompt dash-h) "-h")
+    (define dash-dash
+      (parse-generate-args '("--model-dir" "m"
+                             "--prompt" "--not-a-flag"
+                             "--max-new-tokens" "4")))
+    (check-equal? (generate-config-prompt dash-dash) "--not-a-flag")
+    (check-help '("generate" "--prompt" "-h" "--help") #px"--temperature")
+    (check-usage '("generate" "--model-dir" "m" "--prompt" "hi" "--max-new-tokens" "--help")
+                 #px"invalid --max-new-tokens: --help")
+    (void))
+
   (test-case "unknown command"
     (check-usage '("nope") #px"unknown command: nope")
     (void))
@@ -67,33 +83,33 @@
 
   (test-case "flag validation"
     (check-usage '("generate" "--model-dir" "m" "--prompt" "" "--max-new-tokens" "1")
-                 #px"--prompt must be non-empty")
+                 #px"prompt must be non-empty")
     (check-usage '("generate" "--model-dir" "m" "--prompt" "hi" "--max-new-tokens" "0")
-                 #px"invalid --max-new-tokens: 0")
+                 #px"max-new-tokens must be an integer >= 1")
     (check-usage '("generate" "--model-dir" "m" "--prompt" "hi" "--max-new-tokens" "-3")
-                 #px"invalid --max-new-tokens: -3")
+                 #px"max-new-tokens must be an integer >= 1")
     (check-usage '("generate" "--model-dir" "m" "--prompt" "hi" "--max-new-tokens" "1.5")
-                 #px"invalid --max-new-tokens: 1.5")
+                 #px"max-new-tokens must be an integer >= 1")
     (check-usage '("generate" "--model-dir" "m" "--prompt" "hi" "--max-new-tokens" "nope")
                  #px"invalid --max-new-tokens: nope")
     (check-usage '("generate" "--model-dir" "m" "--prompt" "hi" "--max-new-tokens" "1"
                                "--temperature" "-0.1")
-                 #px"invalid --temperature: -0.1")
+                 #px"temperature must be a finite number >= 0")
     (check-usage '("generate" "--model-dir" "m" "--prompt" "hi" "--max-new-tokens" "1"
                                "--temperature" "hot")
                  #px"invalid --temperature: hot")
     (check-usage '("generate" "--model-dir" "m" "--prompt" "hi" "--max-new-tokens" "1"
                                "--temperature" "+inf.0")
-                 #px"invalid --temperature")
+                 #px"temperature must be a finite number >= 0")
     (check-usage '("generate" "--model-dir" "m" "--prompt" "hi" "--max-new-tokens" "1"
                                "--temperature" "+nan.0")
-                 #px"invalid --temperature")
+                 #px"temperature must be a finite number >= 0")
     (check-usage '("generate" "--model-dir" "m" "--prompt" "hi" "--max-new-tokens" "1"
                                "--temperature" "0" "--top-k" "0")
-                 #px"invalid --top-k: 0")
+                 #px"top-k must be an integer >= 1")
     (check-usage '("generate" "--model-dir" "m" "--prompt" "hi" "--max-new-tokens" "1"
                                "--temperature" "0.8" "--seed" "-1")
-                 #px"invalid --seed: -1")
+                 #px"seed must be an integer >= 0")
     (check-usage '("generate" "--model-dir" "m" "--prompt" "hi" "--max-new-tokens" "1"
                                "--top-k" "40")
                  #px"top-k requires temperature > 0")

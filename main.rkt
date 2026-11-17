@@ -3,6 +3,7 @@
 ;; CLI entry and public API. Implementation lives under src/.
 
 (require "src/cli.rkt"
+         "src/errors.rkt"
          "src/generate.rkt"
          "src/model-assets.rkt")
 
