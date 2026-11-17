@@ -4,7 +4,9 @@
   (require rackunit
            racket/flonum
            racket/string
-           "../bench/harness.rkt")
+           "../bench/harness.rkt"
+           "../src/nn.rkt"
+           "../src/tensor.rkt")
 
   (test-case "flvector dot product"
     (check-equal? (flvector-dot (flvector 1.0 2.0 3.0)
@@ -54,4 +56,26 @@
     (check-regexp-match #px"first-token-ms: " text)
     (check-regexp-match #px"steady-tokens-per-sec: " text)
     (check-regexp-match #px"peak-bytes: " text)
-    (check-true (string-contains? text "placeholder kernel"))))
+    (check-true (string-contains? text "placeholder kernel"))
+    (check-true (string-contains? text "current-memory-use 'peak")))
+
+  (test-case "matmul benchmark times the square kernel"
+    (define sample (run-matmul-benchmark #:dim 8))
+    (check-equal? (matmul-sample-dim sample) 8)
+    (check-true (>= (matmul-sample-ms sample) 0))
+    (check-true (or (= (matmul-sample-gflops sample) +inf.0)
+                    (> (matmul-sample-gflops sample) 0)))
+    (check-true (>= (matmul-sample-allocated-bytes sample) 0))
+    (check-true (>= (matmul-sample-gc-delta sample) 0))
+    (define text (format-matmul-report sample))
+    (check-regexp-match #px"matmul-dim: 8" text)
+    (check-regexp-match #px"matmul-gflops: " text)
+    (check-regexp-match #px"matmul-allocated-bytes: " text)
+    (check-regexp-match #px"matmul-gc-delta: " text)
+    (check-regexp-match #px"matmul-stats-slot-11: " text)
+    (define-values (x W b)
+      (let ([data (make-flvector 64 1.0)])
+        (values (make-tensor '(8 8) data)
+                (make-tensor '(8 8) (make-flvector 64 1.0))
+                (make-tensor '(8) (make-flvector 8 0.0)))))
+    (check-equal? (tensor-ref (matmul x W b) 3 4) 8.0)))
