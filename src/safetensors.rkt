@@ -73,7 +73,7 @@
          (raise-gpt2 (format "safetensors dtype ~a is not F32: ~a" dtype name)))
        (define shape (hash-ref info 'shape #f))
        (define offsets (hash-ref info 'data_offsets #f))
-       (unless (and (list? shape) (andmap read-exact-integer shape))
+       (unless (and (list? shape) (pair? shape) (andmap read-exact-integer shape))
          (raise-gpt2 (format "safetensors shape is invalid: ~a" name)))
        (unless (and (list? offsets) (= (length offsets) 2))
          (raise-gpt2 (format "safetensors offsets are invalid: ~a" name)))
