@@ -3,6 +3,7 @@
 ;; CLI entry and public API. Implementation lives under src/.
 
 (require "src/attention.rkt"
+         "src/block.rkt"
          "src/bpe-bytes.rkt"
          "src/cli.rkt"
          "src/embed.rkt"
@@ -64,7 +65,11 @@
          attention-scale
          causal-scores
          attend
-         gpt2-attention)
+         gpt2-attention
+         gpt2-mlp
+         gpt2-block
+         gpt2-blocks
+         gpt2-ln-f)
 
 (module+ main
   (exit (run-cli (current-command-line-arguments))))
