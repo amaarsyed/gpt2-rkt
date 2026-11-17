@@ -1,6 +1,6 @@
 # gpt2-rkt
 
-Pure-Racket inference for GPT-2 Small (124M). Numeric work uses `flvector` and `racket/flonum`. On more than one processor, a matrix multiply of at least 100000 flops is split across rows when it has 32 or more rows, and across output columns otherwise. That still covers a single-token logits multiply. A smaller multiply stays in one thread, including the per-head products during single-token decode. Each split uses four times as many blocks as `processor-count`. Model weights are not in git.
+Pure-Racket inference for GPT-2 Small (124M). Numeric work uses `flvector` and `racket/flonum`. Large matrix products split across rows or output columns, with one block per processor. Attention computes only the visible causal prefix. Prefill can run heads in parallel; a decode query stays serial. Model weights are not in git.
 
 This is the 0.1.0 line. `generate` loads a GPT-2 directory, encodes the prompt, and writes each decoded token as it is chosen. A missing file names the asset and `sh tools/fetch-gpt2-vocab.sh`. The fetch script and the digest check reject a corrupt file; `load-model` checks shapes and keys, not the digest. `model.safetensors` is little-endian F32, read in place from the header offsets. Names may be bare (`wte.weight`) or prefixed with `transformer.`. The `attn.bias` and `attn.masked_bias` buffers are ignored. A `lm_head.weight` that matches `wte` is accepted and unused. The tiny model uses the same reader.
 
@@ -84,9 +84,12 @@ milestone merges on the same Windows machine with one shared driver. It records
 load, prefill, 128-token generation, matrix kernels, and memory, with raw samples
 and matching greedy token IDs. These results are separate from the VM reference.
 
+[Phase 8](docs/PHASE8.md) records the speed changes and an alternating comparison
+against the tree before those changes, including timed allocation counts.
+
 `src/tensor.rkt` is a row-major tensor on one `flvector`, with explicit dimensions. `src/nn.rkt` is the GPT-2 arithmetic:
 
-- `matmul` is Hugging Face Conv1D: `y[n, out] = x[n, in] · W[in, out] + b[out]`. The inner loop is i-k-j so each step reads a contiguous weight row. A product of at least 100000 flops with thirty-two or more rows is split across rows. A shorter product of that size is split across columns. Smaller products stay serial. Both splits use four blocks per core.
+- `matmul` is Hugging Face Conv1D: `y[n, out] = x[n, in] · W[in, out] + b[out]`. The inner loop is i-k-j so each step reads a contiguous weight row. A product of at least 100000 flops with thirty-two or more rows is split across rows. A shorter product of that size is split across columns. Smaller products stay serial. Both splits use one block per processor.
 - `matmul-transposed-b` is `h[n, in] · Wᵀ` with `W` stored as `[out, in]`, for tied-embedding logits. It does not allocate a transpose.
 - `tensor-add` is the residual add.
 - `softmax` is row-wise on the last axis. It subtracts the row max, and an all-masked row (every value `-inf.0`) is zeros.
@@ -99,6 +102,12 @@ and matching greedy token IDs. These results are separate from the VM reference.
 `gpt2-attention` is one GPT-2 block's attention. `c_attn` is a Conv1D to `[n, 3*d]`, split on the last axis into `q`, `k`, and `v`. Head `h` is columns `[h*d-head, (h+1)*d-head)`, not an interleaved stride. Scores are dotted per head, scaled by `1/sqrt(d-head)` (so `1/8` when the head is 64), and a key strictly after the query is `-inf.0` before the stable softmax. The heads are merged and passed through `c_proj`.
 
 `k` and `v` may be longer than `q`. Query row `i` is at position `rows(k) - rows(q) + i`, which is the same alignment as a past-key prefix: the new queries see the cached keys and not a later query in the same chunk. `attend` takes `#:kv-rows` so a buffer allocated to `n_positions` is not treated as a full sequence. The model writes each new key and value row into that buffer. A head reads its columns from the filled prefix with a column offset, so the prefix is not copied on every token.
+
+Each query computes and normalizes only its visible scores. A request-owned
+workspace reuses one score row per head across queries and layers. Large
+prefills give each head a future, with disjoint scratch and output columns.
+GELU and residual additions reuse fresh product buffers; caller inputs and
+returned trace tensors remain independent.
 
 ## Transformer block
 
