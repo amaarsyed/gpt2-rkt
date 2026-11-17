@@ -53,13 +53,19 @@ racket bench/harness.rkt
 
 `src/tensor.rkt` is a row-major tensor on one `flvector`, with explicit dimensions. `src/nn.rkt` is the GPT-2 arithmetic:
 
-- `matmul` is Hugging Face Conv1D: `y[n, out] = x[n, in] · W[in, out] + b[out]`. The inner loop is i-k-j so each step reads a contiguous weight row.
+- `matmul` is Hugging Face Conv1D: `y[n, out] = x[n, in] · W[in, out] + b[out]`. The inner loop is i-k-j so each step reads a contiguous weight row. Thirty-two or more rows are split across rows. Fewer rows, with thirty-two or more columns, are split across columns. Both use four blocks per core.
 - `matmul-transposed-b` is `h[n, in] · Wᵀ` with `W` stored as `[out, in]`, for tied-embedding logits. It does not allocate a transpose.
 - `tensor-add` is the residual add.
 - `softmax` is row-wise on the last axis. It subtracts the row max, and an all-masked row (every value `-inf.0`) is zeros.
 - `layer-norm` uses biased variance (divide by `n`), epsilon `1e-5`, and a gain and bias.
 - `gelu` is the GPT-2 tanh approximation.
 - `slice-rows`, `slice-cols`, `split-last`, and `tensor-reshape` cut and regroup axes for later `q`, `k`, `v`, and heads. Slices copy. Reshape shares the `flvector`.
+
+## Causal attention
+
+`gpt2-attention` is one GPT-2 block's attention. `c_attn` is a Conv1D to `[n, 3*d]`, split on the last axis into `q`, `k`, and `v`. Head `h` is columns `[h*d-head, (h+1)*d-head)`, not an interleaved stride. Scores are dotted per head, scaled by `1/sqrt(d-head)` (so `1/8` when the head is 64), and a key strictly after the query is `-inf.0` before the stable softmax. The heads are merged and passed through `c_proj`.
+
+`k` and `v` may be longer than `q`. Query row `i` is at position `rows(k) - rows(q) + i`, which is the same alignment as a past-key prefix: the new queries see the cached keys and not a later query in the same chunk. Milestone 5 can append key and value rows and call `attend` unchanged. That is the cache seam; the cache itself is not stored here.
 
 ## Tokenizer and embeddings
 
