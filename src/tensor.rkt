@@ -23,8 +23,7 @@
          flvector-dot
          dims->string
          matrix-shape
-         paste-cols!
-         )
+         paste-cols!)
 
 (struct tensor (dims data)
   #:constructor-name raw-tensor
