@@ -19,6 +19,7 @@
          slice-cols
          split-last
          tensor-reshape
+         tensor-row-groups
          flvector-dot
          dims->string)
 
@@ -65,6 +66,11 @@
     (if (null? (cdr dims))
         (car dims)
         (loop (cdr dims)))))
+
+(define (tensor-row-groups dims)
+  (define width (last-dim dims))
+  (define total (dim-product dims))
+  (values width (if (zero? width) 0 (quotient total width))))
 
 (define (butlast dims)
   (if (null? (cdr dims))
@@ -154,14 +160,10 @@
   (define cols (cadr dims))
   (check-slice 'slice-rows start end rows)
   (define n (- end start))
-  (define out (make-flvector (* n cols)))
   (define src (tensor-data t))
   (define base (* start cols))
   (define count (* n cols))
-  (let loop ([i 0])
-    (unless (fx= i count)
-      (flvector-set! out i (flvector-ref src (fx+ base i)))
-      (loop (fx+ i 1))))
+  (define out (flvector-copy src base (+ base count)))
   (raw-tensor (list n cols) out))
 
 (define (slice-cols t start end)
