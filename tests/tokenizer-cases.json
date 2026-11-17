@@ -231,6 +231,16 @@
       ]
     },
     {
+      "name": "newlines-file-separator",
+      "text": "\n\n\u001ca",
+      "ids": [
+        198,
+        198,
+        216,
+        64
+      ]
+    },
+    {
       "name": "space-group-separator",
       "text": " \u001da",
       "ids": [

@@ -48,6 +48,7 @@ CASES = [
     ("record-separator", "\u001e"),
     ("unit-separator", "\u001f"),
     ("space-file-separator", " \u001ca"),
+    ("newlines-file-separator", "\n\n\u001ca"),
     ("space-group-separator", " \u001da"),
     ("space-record-separator", " \u001ea"),
     ("space-unit-separator", " \u001fa"),
