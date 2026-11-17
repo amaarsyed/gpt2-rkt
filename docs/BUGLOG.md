@@ -4,6 +4,7 @@ Defects found while building gpt2-rkt. Add one row per bug.
 
 | Symptom | Cause | Fix | Commit | Regression check |
 | --- | --- | --- | --- | --- |
+| The phase 8 results edit did not apply | The patch included a context line from the experiment log while targeting the phase summary | Retry with only the matching phase-summary context | Recorded before retry; no source file changed | `apply_patch` rejected the edit atomically |
 | The updated README still said generation allocated `n_positions` rows | The phase 8 cache code changed but the old inference paragraph remained | Describe the request-sized key/value buffers | Before fix: `446c1d0`; corrected in `d5046b7` | README inference paragraph against `empty-kv-cache` in `model-generate` |
 | The cache-description log named a nonexistent commit | A short SHA was typed without reading the commit result | Read both SHAs from `git rev-parse` | Before fix: `d5046b7`; correction follows | `git cat-file -e` for both referenced commits |
 | A register-kernel trial printed `#<procedure:+>` before the benchmark JSON | Patch construction left a standalone `+` expression at the top level | Discard the slower prototype and retain only its JSON measurements | Retrospective; uncommitted trial | Kernel benchmark stdout; `docs/PHASE8-EXPERIMENTS.md` |
