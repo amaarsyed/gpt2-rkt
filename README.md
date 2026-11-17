@@ -8,7 +8,7 @@ Tested with Racket CS 9.3. CI installs that version and runs `raco test`. Python
 
 ## Commands
 
-Fetch the pinned tokenizer, `config.json`, and `model.safetensors` (the weights stay out of git), then run the tests:
+Fetch the pinned tokenizer, `config.json`, and `model.safetensors` (the weights stay out of git), then run the tests. `GPT2_FETCH_WEIGHTS=0` skips the weight file. CI's unit job does that, and a separate job downloads the weights and runs the real-model test:
 
 ```sh
 sh tools/fetch-gpt2-vocab.sh
