@@ -8,7 +8,8 @@
            "../src/attention.rkt"
            "../src/block.rkt"
            "../src/nn.rkt"
-           "../src/tensor.rkt")
+           "../src/tensor.rkt"
+           "fixture-util.rkt")
 
   (define (elements t)
     (define data (tensor-data t))
@@ -225,30 +226,10 @@
     (check-equal? (elements (layer-norm (gpt2-blocks x (list b1 b2)) gain bias))
                   (elements (layer-norm mid gain bias))))
 
-  (define (flat-flonums nested)
-    (let loop ([nested nested])
-      (cond
-        [(list? nested) (apply append (map loop nested))]
-        [(and (string? nested) (string=? nested "-inf")) (list -inf.0)]
-        [(real? nested) (list (real->double-flonum nested))]
-        [else (error 'block-fixture "bad number: ~a" nested)])))
-
-  (define (flvector-from nums)
-    (define data (make-flvector (length nums)))
-    (for ([n (in-list nums)] [i (in-naturals)])
-      (flvector-set! data i n))
-    data)
-
-  (define (tensor-from nested dims)
-    (make-tensor dims (flvector-from (flat-flonums nested))))
-
-  (define (max-abs-error got expected)
-    (for/fold ([m 0.0]) ([g (in-list got)] [e (in-list expected)])
-      (max m (abs (- g e)))))
-
-  (define (within-tolerance? got expected)
-    (for/and ([g (in-list got)] [e (in-list expected)])
-      (<= (abs (- g e)) (+ 1e-3 (* 1e-4 (abs e))))))
+  ;; Project acceptance remains |a-e| <= 1e-3 + 1e-4*|e|. This fixture is
+  ;; order 1 with an observed error near 1e-6, so 1e-5 absolute still
+  ;; passes and rejects erf GELU and a wrong layer-norm epsilon.
+  (define fixture-abs-tol 1e-5)
 
   (define-runtime-path fixture-path "block-cases.json")
 
@@ -290,7 +271,9 @@
               (list "out" (elements (block-trace-out trace)) (flat-flonums (hash-ref block 'out)))))
       (for ([pair (in-list pairs)])
         (check-equal? (length (cadr pair)) (length (caddr pair)) (car pair))
-        (check-true (within-tolerance? (cadr pair) (caddr pair))
+        (check-true (within-tolerance? (cadr pair) (caddr pair)
+                                      #:abs fixture-abs-tol
+                                      #:rel 0.0)
                     (format "~a max abs error ~a" (car pair) (max-abs-error (cadr pair) (caddr pair)))))
       (set! hidden (block-trace-out trace)))
     (define stacked (gpt2-blocks (tensor-from (hash-ref fixture 'x) (list seq d)) params-list))
@@ -298,6 +281,8 @@
                              (tensor-from (hash-ref fixture 'ln-f-gain) (list d))
                              (tensor-from (hash-ref fixture 'ln-f-bias) (list d))))
     (define expected-final (flat-flonums (hash-ref fixture 'ln-f)))
-    (check-true (within-tolerance? (elements final) expected-final)
+    (check-true (within-tolerance? (elements final) expected-final
+                                  #:abs fixture-abs-tol
+                                  #:rel 0.0)
                 (format "ln_f max abs error ~a" (max-abs-error (elements final) expected-final))))
   )
