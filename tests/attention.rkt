@@ -178,6 +178,7 @@
       (define got (cadr pair))
       (define expected (caddr pair))
       (check-equal? (length got) (length expected) name)
-      (check-true (within-tolerance? got expected)
+      ;; The acceptance bar stays 1e-3 + 1e-4*|e|. This fixture is tighter.
+      (check-true (within-tolerance? got expected #:abs 1e-5 #:rel 0.0)
                   (format "~a max abs error ~a" name (max-abs-error got expected)))))
   )
