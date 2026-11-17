@@ -157,7 +157,11 @@ def main() -> None:
     (OUT / "config.json").write_text(json.dumps(config.to_dict(), indent=2) + "\n")
     (OUT / "vocab.json").write_text(json.dumps(vocab, ensure_ascii=False) + "\n")
     (OUT / "merges.txt").write_text("#version: 0.2\n")
-    state = {name: tensor for name, tensor in model.state_dict().items()}
+    state = {
+        name: tensor
+        for name, tensor in model.state_dict().items()
+        if name != "lm_head.weight"
+    }
     write_safetensors(OUT / "model.safetensors", state)
     reference = {
         "prompt": PROMPT,

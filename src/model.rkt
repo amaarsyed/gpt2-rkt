@@ -9,6 +9,7 @@
 (require json
          racket/flonum
          racket/list
+         racket/string
          "block.rkt"
          "embed.rkt"
          "errors.rkt"
@@ -19,19 +20,36 @@
          "tokenizer.rkt")
 
 (provide load-model
+         load-report?
+         load-report-seconds
+         load-report-bytes
+         current-load-report
          make-gpt2
          gpt2-model?
          gpt2-model-vocab-size
          gpt2-model-n-positions
+         gpt2-model-n-embd
          gpt2-model-eos-id
          gpt2-model-tokenizer
          next-token-logits
          model-forward
+         model-activations
+         activation-trace?
+         activation-trace-embed
+         activation-trace-blocks
+         activation-trace-ln-f
+         activation-trace-logits
          empty-kv-cache
          generation?
          generation-token-ids
          generation-text
          model-generate)
+
+(struct load-report (seconds bytes) #:transparent)
+
+(define current-load-report (make-parameter #f))
+
+(struct activation-trace (embed blocks ln-f logits) #:transparent)
 
 (struct gpt2-model (vocab-size n-positions n-embd n-head eos-id
                     wte wpe blocks ln-gain ln-bias tokenizer)
@@ -74,6 +92,25 @@
 
 (define (tied-logits h wte)
   (matmul-transposed-b h wte))
+
+(define (model-activations model ids)
+  (unless (gpt2-model? model)
+    (raise-argument-error 'model-activations "gpt2-model?" model))
+  (when (null? ids)
+    (raise-gpt2 "model-activations needs at least one token"))
+  (check-context 'model-activations (length ids) (context-limit model))
+  (define embed (input-embed (gpt2-model-wte model)
+                             (gpt2-model-wpe model)
+                             ids))
+  (define-values (final blocks)
+    (for/fold ([hidden embed] [outs '()])
+              ([params (in-list (gpt2-model-blocks model))])
+      (define out (gpt2-block hidden params))
+      (values out (cons out outs))))
+  (define hidden (layer-norm final
+                             (gpt2-model-ln-gain model)
+                             (gpt2-model-ln-bias model)))
+  (activation-trace embed (reverse blocks) hidden (tied-logits hidden (gpt2-model-wte model))))
 
 (define (model-forward model ids cache)
   (unless (gpt2-model? model)
@@ -230,10 +267,6 @@
     [(and (real? value) (integer? value)) (inexact->exact value)]
     [else (raise-gpt2 (format "config ~a is not an integer" key))]))
 
-(define (tensor-named tensors name)
-  (hash-ref tensors name
-            (lambda () (raise-gpt2 (format "missing tensor: ~a" name)))))
-
 (define layer-suffixes
   '("ln_1.weight" "ln_1.bias"
     "attn.c_attn.weight" "attn.c_attn.bias"
@@ -242,44 +275,108 @@
     "mlp.c_fc.weight" "mlp.c_fc.bias"
     "mlp.c_proj.weight" "mlp.c_proj.bias"))
 
-(define (load-model model-dir)
+;; The published GPT-2 file has no `transformer.` prefix. A file written
+;; from a GPT2LMHeadModel state dict still has one, so strip it.
+(define (canonical-weight-name name)
+  (if (string-prefix? name "transformer.")
+      (substring name (string-length "transformer."))
+      name))
+
+(define (ignored-mask? name)
+  (regexp-match? #rx"(?:^|\\.)attn\\.bias$" (canonical-weight-name name)))
+
+(define (expected-weight-names n-layer)
+  (append '("wte.weight" "wpe.weight" "ln_f.weight" "ln_f.bias")
+          (for*/list ([i (in-range n-layer)]
+                      [suffix (in-list layer-suffixes)])
+            (format "h.~a.~a" i suffix))))
+
+(define (expected-weight-shape name n-embd n-positions n-inner vocab)
+  (cond
+    [(equal? name "wte.weight") (list vocab n-embd)]
+    [(equal? name "wpe.weight") (list n-positions n-embd)]
+    [(regexp-match? #rx"(?:^|\\.)(?:ln_[12f])\\.(?:weight|bias)$" name) (list n-embd)]
+    [(regexp-match? #rx"\\.attn\\.c_attn\\.weight$" name) (list n-embd (* 3 n-embd))]
+    [(regexp-match? #rx"\\.attn\\.c_attn\\.bias$" name) (list (* 3 n-embd))]
+    [(regexp-match? #rx"\\.attn\\.c_proj\\.weight$" name) (list n-embd n-embd)]
+    [(regexp-match? #rx"\\.attn\\.c_proj\\.bias$" name) (list n-embd)]
+    [(regexp-match? #rx"\\.mlp\\.c_fc\\.weight$" name) (list n-embd n-inner)]
+    [(regexp-match? #rx"\\.mlp\\.c_fc\\.bias$" name) (list n-inner)]
+    [(regexp-match? #rx"\\.mlp\\.c_proj\\.weight$" name) (list n-inner n-embd)]
+    [(regexp-match? #rx"\\.mlp\\.c_proj\\.bias$" name) (list n-embd)]
+    [else #f]))
+
+(define (attach-fetch-hint e)
+  (define msg (exn-message e))
+  (if (string-contains? msg asset-fetch-command)
+      (raise e)
+      (raise-gpt2 (string-append msg "\n" asset-fetch-command))))
+
+(define (load-model-file model-dir)
   (define problem (missing-model-assets-message model-dir))
   (when problem
     (raise-gpt2 problem))
-  (define cfg
-    (with-handlers ([exn:fail:gpt2? (lambda (e) (raise e))]
-                    [exn:fail? (lambda (e)
-                                 (raise-gpt2 (format "could not read config.json: ~a"
-                                                     (exn-message e))))])
-      (call-with-input-file (build-path model-dir "config.json") read-json)))
-  (unless (hash? cfg)
-    (raise-gpt2 "config.json is not an object"))
-  (define n-layer (config-int cfg 'n_layer #f))
-  (define n-embd (config-int cfg 'n_embd #f))
-  (define n-head (config-int cfg 'n_head #f))
-  (define vocab (config-int cfg 'vocab_size #f))
-  (unless (and n-layer n-embd n-head vocab)
-    (raise-gpt2 "config.json is missing n_layer, n_embd, n_head, or vocab_size"))
-  (define tok (load-tokenizer (build-path model-dir "vocab.json")
-                              (build-path model-dir "merges.txt")))
-  (define weights (read-safetensors (build-path model-dir "model.safetensors")))
-  (define blocks
-    (for/list ([i (in-range n-layer)])
-      (define prefix (format "transformer.h.~a." i))
-      (define tensors
-        (for/hash ([suffix (in-list layer-suffixes)])
-          (values suffix (tensor-named weights (string-append prefix suffix)))))
-      (block-params-from-tensors #:n-head n-head tensors)))
-  (define model
-    (make-gpt2 #:wte (tensor-named weights "transformer.wte.weight")
-               #:wpe (tensor-named weights "transformer.wpe.weight")
+  (with-handlers ([exn:fail:gpt2? attach-fetch-hint])
+    (define cfg
+      (with-handlers ([exn:fail:gpt2? (lambda (e) (raise e))]
+                      [exn:fail? (lambda (e)
+                                   (raise-gpt2 (format "could not read config.json: ~a"
+                                                       (exn-message e))))])
+        (call-with-input-file (build-path model-dir "config.json") read-json)))
+    (unless (hash? cfg)
+      (raise-gpt2 "config.json is not an object"))
+    (define n-layer (config-int cfg 'n_layer #f))
+    (define n-embd (config-int cfg 'n_embd #f))
+    (define n-head (config-int cfg 'n_head #f))
+    (define n-positions (config-int cfg 'n_positions #f))
+    (define vocab (config-int cfg 'vocab_size #f))
+    (unless (and n-layer n-embd n-head n-positions vocab)
+      (raise-gpt2 "config.json is missing n_layer, n_embd, n_head, n_positions, or vocab_size"))
+    (unless (zero? (remainder n-embd n-head))
+      (raise-gpt2 (format "n_embd ~a is not divisible by n_head ~a" n-embd n-head)))
+    (define n-inner (or (config-int cfg 'n_inner #f) (* 4 n-embd)))
+    (define tok (load-tokenizer (build-path model-dir "vocab.json")
+                                (build-path model-dir "merges.txt")))
+    (define raw (read-safetensors (build-path model-dir "model.safetensors")
+                                  #:skip ignored-mask?))
+    (define weights
+      (for/fold ([table (hash)]) ([(name tensor) (in-hash raw)])
+        (define key (canonical-weight-name name))
+        (when (hash-has-key? table key)
+          (raise-gpt2 (format "duplicate tensor: ~a" key)))
+        (hash-set table key tensor)))
+    (define names (expected-weight-names n-layer))
+    (define missing
+      (filter (lambda (name) (not (hash-ref weights name #f))) names))
+    (unless (null? missing)
+      (raise-gpt2 (format "missing tensor: ~a" (string-join (sort missing string<?) ", "))))
+    (define extra
+      (filter (lambda (name) (not (member name names))) (hash-keys weights)))
+    (unless (null? extra)
+      (raise-gpt2 (format "unexpected tensor: ~a" (string-join (sort extra string<?) ", "))))
+    (for ([name (in-list names)])
+      (define got (tensor-dims (hash-ref weights name)))
+      (define want (expected-weight-shape name n-embd n-positions n-inner vocab))
+      (unless (equal? got want)
+        (raise-gpt2 (format "~a has shape ~a, expected ~a" name got want))))
+    (define blocks
+      (for/list ([i (in-range n-layer)])
+        (define tensors
+          (for/hash ([suffix (in-list layer-suffixes)])
+            (values suffix (hash-ref weights (format "h.~a.~a" i suffix)))))
+        (block-params-from-tensors #:n-head n-head tensors)))
+    (make-gpt2 #:wte (hash-ref weights "wte.weight")
+               #:wpe (hash-ref weights "wpe.weight")
                #:blocks blocks
-               #:ln-gain (tensor-named weights "transformer.ln_f.weight")
-               #:ln-bias (tensor-named weights "transformer.ln_f.bias")
+               #:ln-gain (hash-ref weights "ln_f.weight")
+               #:ln-bias (hash-ref weights "ln_f.bias")
                #:eos-id (config-int cfg 'eos_token_id endoftext-id)
-               #:tokenizer tok))
-  (unless (= (gpt2-model-vocab-size model) vocab)
-    (raise-gpt2
-     (format "wte rows ~a do not match vocab_size ~a"
-             (gpt2-model-vocab-size model) vocab)))
+               #:tokenizer tok)))
+
+(define (load-model model-dir)
+  (define started (current-inexact-milliseconds))
+  (define model (load-model-file model-dir))
+  (current-load-report
+   (load-report (/ (- (current-inexact-milliseconds) started) 1000.0)
+                (current-memory-use)))
   model)
