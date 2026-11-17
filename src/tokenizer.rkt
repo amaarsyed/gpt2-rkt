@@ -1,8 +1,10 @@
 #lang racket/base
 
-;; GPT-2 byte-level BPE. encode and decode follow OpenAI's encoder.py.
+;; GPT-2 byte-level BPE. The byte map and merges follow encoder.py.
 ;; <|endoftext|> is matched on the raw text before the pre-tokenizer,
-;; because the regex would otherwise split it. Its vocab id is 50256.
+;; because the regex would otherwise split it. That special-token scan
+;; is tiktoken and HF behaviour. A prompt that contains the literal
+;; <|endoftext|> therefore encodes as token 50256.
 
 (require json
          racket/port
