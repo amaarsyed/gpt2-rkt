@@ -23,7 +23,6 @@
 
 (provide prefill-lengths
          default-prompt
-         default-seed
          default-runs
          default-new-tokens
          ids-of-length
@@ -32,12 +31,12 @@
          configuration-pids
          isolated-configurations?
          report-markdown
+         drain-subprocess-ports
          call-bench-child
          build-report)
 
 (define prefill-lengths '(16 128 512 1000))
 (define default-prompt "Once upon a time")
-(define default-seed 1)
 (define default-runs 3)
 (define default-new-tokens 128)
 
@@ -49,7 +48,6 @@
         "--model-dir" #t
         "--runs" #t
         "--prompt" #t
-        "--seed" #t
         "--label" #t
         "--note" #t
         "--out-dir" #t
@@ -112,15 +110,28 @@
   (for/list ([i (in-range n)])
     (vector-ref vec (remainder i len))))
 
-(define (greedy-ids model prompt-ids n seed)
+(define (greedy-ids model prompt-ids n)
   (generation-token-ids
-   (model-generate model prompt-ids n #:seed seed #:stop-at-eos? #f)))
+   (model-generate model prompt-ids n #:stop-at-eos? #f)))
 
 (define (running-racket)
   (define exec (find-system-path 'exec-file))
   (if (complete-path? exec)
       exec
       (or (find-executable-path exec) exec)))
+
+;; Read both pipes together. Draining stdout to EOF first deadlocks when
+;; the child fills the stderr pipe before it closes stdout.
+(define (drain-subprocess-ports proc out err)
+  (define err-text (box ""))
+  (define err-thread
+    (thread (lambda () (set-box! err-text (port->string err)))))
+  (define text (port->string out))
+  (thread-wait err-thread)
+  (close-input-port out)
+  (close-input-port err)
+  (subprocess-wait proc)
+  (values text (unbox err-text) (subprocess-status proc)))
 
 (define (call-bench-child args)
   (define-values (proc out in err)
@@ -129,12 +140,8 @@
            (path->string self-path)
            args))
   (close-output-port in)
-  (define text (port->string out))
-  (define err-text (port->string err))
-  (close-input-port out)
-  (close-input-port err)
-  (subprocess-wait proc)
-  (unless (zero? (subprocess-status proc))
+  (define-values (text err-text status) (drain-subprocess-ports proc out err))
+  (unless (zero? status)
     (eprintf "~a" err-text)
     (error 'bench "child failed: ~a" args))
   (define js (read-json (open-input-string text)))
@@ -154,9 +161,13 @@
     (exit 1))
   dir)
 
+;; load-model does not collect. The resident figure is current-memory-use
+;; after a collection, so the weight-file buffer is not part of it.
 (define (load-for-bench dir)
   (define model (load-model dir))
-  (values model (load-report-seconds (current-load-report))))
+  (define seconds (load-report-seconds (current-load-report)))
+  (collect-garbage)
+  (values model seconds (current-memory-use)))
 
 (define (timed-same-ids thunk runs)
   (define warm (thunk))
@@ -175,13 +186,12 @@
 (define (child-load args)
   (define dir (require-model-dir (flag args "--model-dir" "models/gpt2")))
   (define runs (positive-int-flag args "--runs" default-runs))
-  (define-values (warm-model warm-seconds) (load-for-bench dir))
+  (define-values (warm-model warm-seconds warm-resident) (load-for-bench dir))
+  (void warm-resident)
   (set! warm-model #f)
-  (collect-garbage)
   (define samples
     (for/list ([_ (in-range runs)])
-      (define-values (model seconds) (load-for-bench dir))
-      (define resident (load-report-bytes (current-load-report)))
+      (define-values (model seconds resident) (load-for-bench dir))
       (set! model #f)
       (cons seconds resident)))
   (emit (hasheq 'kind "load"
@@ -202,11 +212,10 @@
   (define runs (positive-int-flag args "--runs" default-runs))
   (define tokens (positive-int-flag args "--tokens" 16))
   (define prompt (flag args "--prompt" default-prompt))
-  (define seed (int-flag args "--seed" default-seed))
   (define-values (model base) (prompt-ids dir prompt))
   (define ids (ids-of-length base tokens))
   (define-values (median-ms next-id)
-    (timed-same-ids (lambda () (car (greedy-ids model ids 1 seed))) runs))
+    (timed-same-ids (lambda () (car (greedy-ids model ids 1))) runs))
   (emit (hasheq 'kind "prefill"
                 'pid (getpid)
                 'tokens tokens
@@ -219,10 +228,9 @@
   (define runs (positive-int-flag args "--runs" default-runs))
   (define new-tokens (positive-int-flag args "--new-tokens" default-new-tokens))
   (define prompt (flag args "--prompt" default-prompt))
-  (define seed (int-flag args "--seed" default-seed))
   (define-values (model base) (prompt-ids dir prompt))
   (define-values (median-ms ids)
-    (timed-same-ids (lambda () (greedy-ids model base new-tokens seed)) runs))
+    (timed-same-ids (lambda () (greedy-ids model base new-tokens)) runs))
   (define seconds (/ median-ms 1000.0))
   (emit (hasheq 'kind "decode"
                 'pid (getpid)
@@ -270,7 +278,6 @@
                       #:not-m5-pro not-m5?
                       #:model-dir model-dir
                       #:prompt prompt
-                      #:seed seed
                       #:runs runs)
   (define day (current-date))
   (hasheq 'label label
@@ -291,7 +298,6 @@
           'ncpu (or (host-ncpu) 'null)
           'model_dir model-dir
           'prompt prompt
-          'seed seed
           'decoding "greedy"
           'runs runs
           'warmup 1
@@ -328,7 +334,9 @@
              (format "~a ms" (fmt-num (hash-ref row 'median_ms)))
              (hash-ref row 'peak_bytes)
              (hash-ref row 'pid)))
-     (list (list (format "decode ~a" (hash-ref decode 'new_tokens))
+     (list (list (format "decode ~a (incl. ~a-token prefill)"
+                        (hash-ref decode 'new_tokens)
+                        (hash-ref decode 'prompt_tokens))
                  (format "~a tok/s" (fmt-num (hash-ref decode 'tokens_per_sec)))
                  (hash-ref decode 'peak_bytes)
                  (hash-ref decode 'pid)))
@@ -352,14 +360,13 @@
            (format "racket: ~a (~a)" (hash-ref report 'racket_version) (hash-ref report 'vm))
            (format "git: ~a" (hash-ref report 'git_sha))
            (format "prompt: ~a" (hash-ref report 'prompt))
-           (format "seed: ~a" (hash-ref report 'seed))
            (format "decoding: ~a, warmup ~a, median of ~a"
                    (hash-ref report 'decoding)
                    (hash-ref report 'warmup)
                    (hash-ref report 'runs))
            (format "note: ~a" (hash-ref report 'note))
            ""
-           "Each row is its own process. Peak is current-memory-use 'peak in that process."
+           "Each row is its own process. Peak is current-memory-use 'peak in that process. Load, prefill, and decode peaks include loading the weights."
            ""
            "| configuration | median | peak bytes | pid |"
            "| --- | --- | ---: | ---: |")
@@ -442,7 +449,6 @@
   (require-model-dir model-dir)
   (define runs (positive-int-flag args "--runs" default-runs))
   (define prompt (flag args "--prompt" default-prompt))
-  (define seed (int-flag args "--seed" default-seed))
   (define new-tokens (positive-int-flag args "--new-tokens" default-new-tokens))
   (define label (flag args "--label" (slug (host-cpu-name))))
   (define note (flag args "--note" ""))
@@ -451,8 +457,7 @@
   (define common
     (list "--model-dir" model-dir
           "--runs" (number->string runs)
-          "--prompt" prompt
-          "--seed" (number->string seed)))
+          "--prompt" prompt))
   (define (step name arg-list)
     (eprintf "bench: ~a\n" name)
     (flush-output (current-error-port))
@@ -482,7 +487,6 @@
                   #:not-m5-pro not-m5?
                   #:model-dir model-dir
                   #:prompt prompt
-                  #:seed seed
                   #:runs runs))
   (unless (isolated-configurations? report)
     (fail "configurations shared a process: ~a" (configuration-pids report)))
