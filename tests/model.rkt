@@ -108,7 +108,7 @@
     (flvector-set! data (* 50256 2) 1.0)
     (define model
       (make-gpt2 #:wte (make-tensor (list vocab 2) data)
-                 #:wpe (filled '(4 2) 0.0)
+                 #:wpe (filled '(8 2) 0.0)
                  #:blocks (list (zero-block 2))
                  #:ln-gain (filled '(2) 0.0)
                  #:ln-bias (make-tensor '(2) (flvector 1.0 0.0))
@@ -124,7 +124,7 @@
                                               2.0 0.0)))
     (define model
       (make-gpt2 #:wte wte
-                 #:wpe (filled '(4 2) 0.0)
+                 #:wpe (filled '(8 2) 0.0)
                  #:blocks (list (zero-block 2))
                  #:ln-gain (filled '(2) 0.0)
                  #:ln-bias (make-tensor '(2) (flvector 1.0 0.0))
@@ -174,6 +174,24 @@
     (check-exn #rx"vocabulary"
                (lambda ()
                  (model-generate model '(0) 1 #:temperature 0.5 #:top-k 5 #:seed 1))))
+
+  (test-case "generation uses the model's position count"
+    (define model
+      (make-gpt2 #:wte (filled '(2 2) 0.0)
+                 #:wpe (filled '(32 2) 0.0)
+                 #:blocks (list (zero-block 2))
+                 #:ln-gain (filled '(2) 0.0)
+                 #:ln-bias (filled '(2) 0.0)
+                 #:eos-id 1))
+    (check-equal? (gpt2-model-n-positions model) 32)
+    (check-exn exn:fail:gpt2?
+               (lambda () (model-generate model '(0) 40)))
+    (check-exn #rx"limit 32"
+               (lambda () (model-generate model '(0) 40)))
+    (check-exn #rx"limit 32"
+               (lambda () (next-token-logits model (make-list 33 0))))
+    (check-equal? (length (generation-token-ids (model-generate model (make-list 31 0) 1)))
+                  1))
 
   (define (json-ints nums)
     (string-append "[" (string-join (map number->string nums) ",") "]"))
