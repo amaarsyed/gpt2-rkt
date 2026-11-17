@@ -1,6 +1,6 @@
 #lang racket/base
 
-;; User-facing failures for the CLI and later loader/tokenizer code.
+;; User-facing failures for the CLI, loader, and tokenizer.
 
 (provide exn:fail:gpt2?
          raise-gpt2)
