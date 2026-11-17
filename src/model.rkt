@@ -179,25 +179,35 @@
 (define (sample-index probs)
   (define n (flvector-length probs))
   (define u (real->double-flonum (random)))
-  (let loop ([i 0] [acc 0.0])
+  (let loop ([i 0] [acc 0.0] [last-positive (sub1 n)])
     (cond
-      [(= i (sub1 n)) i]
+      [(= i n) last-positive]
       [else
-       (define next (fl+ acc (flvector-ref probs i)))
+       (define p (flvector-ref probs i))
+       (define next (fl+ acc p))
+       (define remember (if (fl> p 0.0) i last-positive))
        (if (fl<= u next)
            i
-           (loop (add1 i) next))])))
+           (loop (add1 i) next remember))])))
+
+(define (scale-logits logits temperature)
+  (define n (flvector-length logits))
+  (define t (real->double-flonum temperature))
+  (define maxv
+    (for/fold ([m -inf.0]) ([i (in-range n)])
+      (flmax m (flvector-ref logits i))))
+  (define scaled (make-flvector n))
+  (for ([i (in-range n)])
+    (flvector-set! scaled i (fl/ (fl- (flvector-ref logits i) maxv) t)))
+  scaled)
 
 (define (choose-token logits temperature top-k)
   (cond
     [(not temperature) (argmax logits)]
     [else
-     (define n (flvector-length logits))
-     (define scaled (make-flvector n))
-     (for ([i (in-range n)])
-       (flvector-set! scaled i (fl/ (flvector-ref logits i) (real->double-flonum temperature))))
+     (define scaled (scale-logits logits temperature))
      (define masked (if top-k (mask-top-k scaled top-k) scaled))
-     (sample-index (tensor-data (softmax (make-tensor (list n) masked))))]))
+     (sample-index (tensor-data (softmax (make-tensor (list (flvector-length logits)) masked))))]))
 
 (define (emit-text model ids out)
   (define tok (gpt2-model-tokenizer model))
