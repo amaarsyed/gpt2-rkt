@@ -1,10 +1,7 @@
 #lang racket/base
 
-;; Full GPT-2 forward pass.
-;; wte + wpe, then the pre-LN blocks, then ln_f, then logits = h · wteᵀ.
-;; The tied head uses matmul-transposed-b, so wte stays stored [vocab, d].
-;; A step may append one token: each layer keeps the key and value rows
-;; it has already computed, and position-embed starts at the cache length.
+;; wte + wpe, pre-LN blocks, ln_f, then tied logits h · wteᵀ.
+;; Cached steps reuse K/V rows and start positions at the filled length.
 
 (require json
          racket/flonum
@@ -57,9 +54,7 @@
   #:constructor-name raw-gpt2
   #:transparent)
 
-;; live is a box of this handle's position. model-forward clears it, so
-;; the same handle cannot be advanced twice: the buffers are mutated in
-;; place and a second call would overwrite the rows just written.
+;; model-forward clears live: reusing a handle would overwrite shared K/V rows.
 (struct kv-cache (layers position live work) #:transparent)
 
 ;; One preallocated key/value buffer per layer. The shared position on
