@@ -214,6 +214,20 @@
                    (model-generate model '(0) 1 #:temperature 1e-310 #:seed 1))
                   '(0)))
 
+  (test-case "top-k keeps the lower IDs on ties and excludes lower logits"
+    (for ([weights (in-list '((1.0 1.0 1.0 1.0) (4.0 3.0 2.0 1.0)))])
+      (define data (make-flvector 8 0.0))
+      (for ([w (in-list weights)] [i (in-naturals)])
+        (flvector-set! data (* 2 i) w))
+      (define model
+        (make-gpt2 #:wte (make-tensor '(4 2) data) #:wpe (filled '(64 2) 0.0)
+                   #:blocks '() #:ln-gain (filled '(2) 0.0)
+                   #:ln-bias (make-tensor '(2) (flvector 1.0 0.0)) #:eos-id 9))
+      (define ids (generation-token-ids
+                   (model-generate model '(0) 50 #:temperature 1.0 #:top-k 2 #:seed 1)))
+      (check-true (andmap (lambda (id) (or (= id 0) (= id 1))) ids)))
+    (void))
+
   (test-case "last-only logits match the last row of the full head"
     (define model
       (make-gpt2 #:wte (filled '(4 2) 0.25)
