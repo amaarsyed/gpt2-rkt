@@ -23,13 +23,13 @@ jobs:
           variant: CS
           version: "9.3"
 
-      - name: Cache pinned BPE files
+      - name: Cache pinned GPT-2 files
         uses: actions/cache@v4
         with:
           path: models/gpt2
-          key: gpt2-bpe-${{ hashFiles('tools/gpt2-assets.sha256') }}
+          key: gpt2-assets-${{ hashFiles('tools/gpt2-assets.sha256') }}
 
-      - name: Fetch pinned BPE files
+      - name: Fetch pinned GPT-2 files
         run: sh tools/fetch-gpt2-vocab.sh
 
       - name: Run tests
@@ -44,7 +44,7 @@ jobs:
       - name: Missing model assets
         run: |
           set +e
-          racket main.rkt generate --model-dir models/gpt2 --prompt "Once upon a time" --max-new-tokens 16 >stdout.txt 2>stderr.txt
+          racket main.rkt generate --model-dir models/missing-gpt2 --prompt "Once upon a time" --max-new-tokens 16 >stdout.txt 2>stderr.txt
           code=$?
           set -e
           test "$code" -ne 0

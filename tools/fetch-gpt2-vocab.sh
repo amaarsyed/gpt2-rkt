@@ -1,7 +1,7 @@
 #!/bin/sh
-# Download the GPT-2 BPE files used by the tests.
+# Download the pinned GPT-2 Small files: tokenizer, config, and weights.
 # Pinned to openai-community/gpt2 at 607a30d783dfa663caf39e06633721c8d4cfcd7e.
-# Digests live in tools/gpt2-assets.sha256. Weights are not downloaded.
+# Digests live in tools/gpt2-assets.sha256. The weights stay out of git.
 
 set -eu
 
@@ -25,7 +25,7 @@ file_sha256() {
 
 expected_sha256() {
   name=$1
-  hash=$(awk -v name="$name" '$2 == name { print $1; exit }' "$assets")
+  hash=$(awk -v name="$name" 'NF >= 2 && $1 !~ /^#/ && $2 == name { print $1; exit }' "$assets")
   if [ -z "$hash" ]; then
     echo "no digest for $name in $assets" >&2
     exit 1
@@ -57,6 +57,8 @@ fetch() {
   mv "$tmp" "$path"
 }
 
-fetch vocab.json
-fetch merges.txt
-echo "cached vocab.json and merges.txt in $dest"
+for name in $(awk 'NF >= 2 && $1 !~ /^#/ { print $2 }' "$assets"); do
+  fetch "$name"
+done
+
+echo "cached pinned GPT-2 files in $dest"
