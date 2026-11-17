@@ -51,4 +51,13 @@ jobs:
           grep -q "^vm: chez-scheme$" bench-out.txt
           grep -q "^prompt-length: 16$" bench-out.txt
           grep -q "^prompt-length: 128$" bench-out.txt
+          grep -q "^matmul-dim: 768$" bench-out.txt
+          grep -q "^matmul-gflops: " bench-out.txt
           rm -f bench-out.txt
+
+      - name: Racket sources do not reference fixtures or Python
+        run: |
+          if grep -R -n -E -i --include='*.rkt' 'tools/fixtures|python' .; then
+            echo "Racket sources must not name the fixture tree or Python"
+            exit 1
+          fi
