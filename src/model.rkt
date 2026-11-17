@@ -22,6 +22,7 @@
          make-gpt2
          gpt2-model?
          gpt2-model-vocab-size
+         gpt2-model-n-positions
          gpt2-model-eos-id
          gpt2-model-tokenizer
          next-token-logits
@@ -62,11 +63,14 @@
 (define (empty-kv-cache model)
   (kv-cache (make-list (length (gpt2-model-blocks model)) #f) 0))
 
-(define (check-context who n)
-  (when (> n gpt2-context-length)
+(define (context-limit model)
+  (min gpt2-context-length (gpt2-model-n-positions model)))
+
+(define (check-context who n limit)
+  (when (> n limit)
     (raise-gpt2
      (format "~a: sequence is longer than the context: ~a tokens, limit ~a"
-             who n gpt2-context-length))))
+             who n limit))))
 
 (define (tied-logits h wte)
   (matmul-transposed-b h wte))
@@ -78,7 +82,7 @@
     (raise-argument-error 'model-forward "list of token ids?" ids))
   (define start (kv-cache-position cache))
   (define n (length ids))
-  (check-context 'model-forward (+ start n))
+  (check-context 'model-forward (+ start n) (context-limit model))
   (define x (input-embed (gpt2-model-wte model)
                          (gpt2-model-wpe model)
                          ids
@@ -184,15 +188,18 @@
     (raise-gpt2 "max-new-tokens must be an integer >= 1"))
   (when (null? ids)
     (raise-gpt2 "prompt must encode to at least one token"))
+  (define limit (context-limit model))
   (define total (+ (length ids) max-new))
-  (when (> total gpt2-context-length)
+  (when (> total limit)
     (raise-gpt2
      (format "prompt plus generation is longer than the context: ~a tokens, limit ~a"
-             total gpt2-context-length)))
+             total limit)))
   (when (and top-k (> top-k (gpt2-model-vocab-size model)))
     (raise-gpt2
      (format "top-k is larger than the vocabulary: ~a > ~a"
              top-k (gpt2-model-vocab-size model))))
+  (when (and seed (>= seed (expt 2 31)))
+    (raise-gpt2 "seed must be an integer from 0 through 2147483647"))
   (define gen (and seed (make-pseudo-random-generator)))
   (when seed
     (parameterize ([current-pseudo-random-generator gen])
