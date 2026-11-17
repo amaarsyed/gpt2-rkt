@@ -1,9 +1,8 @@
 # gpt2-rkt 0.1.0
 
 Pure-Racket inference for GPT-2 Small (124M) on Racket CS 9.3. This note
-describes the tree that is ready to release. It does not create a git
-tag or a GitHub release. The owner merges the stack first, then runs
-`sh bench/run.sh` on the M5 Pro. The numbers below are from the cloud
+describes the 0.1.0 tree. Published numbers for a machine come from
+`sh bench/run.sh` on that machine. The numbers below are from the cloud
 VM, and the checked-in `vm-reference` result is labeled as that.
 
 ## Pinned assets
@@ -37,19 +36,24 @@ Greedy continuation of `Once upon a time`, 16 tokens:
 
 `, the world was a place of great beauty and great danger. The world was`
 
-On this VM the benchmark median is the table below. A separate 16-token
-generation, which includes the prompt, was about 6.3 to 7.2 tokens per
-second. Neither figure is the M5 Pro number.
+On this VM the benchmark median is the table below. The 9.34 tok/s row
+is 128 new tokens and includes the 4-token prompt prefill, about 107 ms
+per token of weight traffic on a bandwidth-bound VM. It is not a
+measurement of the in-place cache read. A separate 16-token generation
+was about 6.3 to 7.2 tok/s; that was a cold first call, so the two rates
+are different quantities. Neither figure is the M5 Pro number.
 
 ## Reference benchmark
 
 `sh bench/run.sh` records the host, the Racket version, `processor-count`,
-and the git SHA. The prompt is `Once upon a time` and the seed is 1.
-Decoding is greedy. One warmup is discarded. The table is the median of
-three runs. Each row is a separate process, so `current-memory-use 'peak`
-is that configuration's high-water mark. For a model process that peak
-still includes the weight-file buffer. The resident size after a
-collection is 1,085,651,056 bytes. The load time is 5.04 s.
+and the git SHA. The prompt is `Once upon a time`. Decoding is greedy
+and does not take a seed. One warmup is discarded. The table is the
+median of three runs. Each row is a separate process, so
+`current-memory-use 'peak` is that configuration's high-water mark.
+Load, prefill, and decode peaks include loading the weights, and that
+peak still includes the weight-file buffer. The resident size after a
+collection in the load measurement is 1,085,651,056 bytes. The load
+time is 5.04 s.
 
 The committed file is `bench/results/vm-reference-2026-11-17.md`, at git
 `14746964b28ee2deb1c387745a45618207fd2fcd`. It is a cloud VM run (Intel
@@ -64,7 +68,7 @@ greedy fixture, and the run produced 128 ids.
 | prefill 128 | 1837.0529 ms | 2,248,863,000 |
 | prefill 512 | 8394.3052 ms | 2,248,857,768 |
 | prefill 1000 | 20660.1813 ms | 2,248,871,536 |
-| decode 128 | 9.3366 tok/s | 2,248,894,184 |
+| decode 128 (incl. 4-token prefill) | 9.3366 tok/s | 2,248,894,184 |
 | matmul 768×768×768 | 14.6842 GFLOP/s | 116,141,152 |
 | matmul 1×768×50257 | 6.0236 GFLOP/s | 413,302,272 |
 

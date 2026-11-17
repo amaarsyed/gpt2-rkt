@@ -9,11 +9,10 @@ processors: 4
 racket: 9.3 (chez-scheme)
 git: 14746964b28ee2deb1c387745a45618207fd2fcd
 prompt: Once upon a time
-seed: 1
 decoding: greedy, warmup 1, median of 3
-note: Reference run on the cloud VM, not the M5 Pro.
+note: Reference run on the cloud VM, not the M5 Pro. The decode rate includes the 4-token prefill.
 
-Each row is its own process. Peak is current-memory-use 'peak in that process.
+Each row is its own process. Peak is current-memory-use 'peak in that process. Load, prefill, and decode peaks include loading the weights.
 
 | configuration | median | peak bytes | pid |
 | --- | --- | ---: | ---: |
@@ -22,7 +21,7 @@ Each row is its own process. Peak is current-memory-use 'peak in that process.
 | prefill 128 | 1837.0529 ms | 2,248,863,000 | 22473 |
 | prefill 512 | 8394.3052 ms | 2,248,857,768 | 22481 |
 | prefill 1000 | 20660.1813 ms | 2,248,871,536 | 22494 |
-| decode 128 | 9.3366 tok/s | 2,248,894,184 | 22505 |
+| decode 128 (incl. 4-token prefill) | 9.3366 tok/s | 2,248,894,184 | 22505 |
 | matmul 768×768×768 | 14.6842 GFLOP/s | 116,141,152 | 22534 |
 | matmul 1×768×50257 | 6.0236 GFLOP/s | 413,302,272 | 22539 |
 
