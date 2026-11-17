@@ -1,8 +1,6 @@
 #lang racket/base
 
-;; Minimal safetensors reader: an 8-byte little-endian header length,
-;; a JSON header, then raw little-endian F32 bytes. Other dtypes are
-;; rejected. load-model uses this reader for both GPT-2 and the tiny model.
+;; Safetensors: little-endian header length, JSON header, then F32 payload.
 
 (require json
          racket/flonum
@@ -20,9 +18,7 @@
     [(and (real? n) (integer? n) (>= n 0)) (inexact->exact n)]
     [else #f]))
 
-;; Read n little-endian F32 values from bs at start. The caller has
-;; already checked that the range is inside bs. The official payload is
-;; not 4-byte aligned, and this reads it in place.
+;; Decode a checked byte range; the F32 payload may be unaligned.
 (define (f32-flvector bs start n)
   (define out (make-flvector n))
   (for ([i (in-range n)])
@@ -34,11 +30,7 @@
 (define (safetensors-entry-name key)
   (if (symbol? key) (symbol->string key) key))
 
-;; `#:skip` drops a tensor before its bytes are decoded. The GPT-2
-;; loader uses it for the `attn.bias` mask buffers. A header need not
-;; be a multiple of 8: the official file's length is 14283, so the
-;; float payload is not 4-byte aligned, and `read-json` still accepts
-;; a header padded with spaces.
+;; Skip mask buffers before decoding. Accept unaligned or space-padded headers.
 (define (read-safetensors path #:skip [skip (lambda (name) #f)])
   (define bs
     (with-handlers ([exn:fail:gpt2? (lambda (e) (raise e))]

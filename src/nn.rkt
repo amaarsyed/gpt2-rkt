@@ -1,14 +1,7 @@
 #lang racket/base
 
-;; GPT-2 numeric kernels. Storage is row-major flvectors.
-;; matmul is HF Conv1D: y[n, out] = x[n, in] · W[in, out] + b[out].
-;; The inner loops are i-k-j so each step reads a contiguous W row.
-;; A multiply below parallel-work-threshold flops runs in one thread, so
-;; a small per-head attention matmul does not spawn futures. Larger
-;; problems split across rows, or across output columns when the row
-;; count is short, which still covers a single-token logits multiply.
-;; matmul-transposed-b is h[n, in] · Wᵀ with W stored as [out, in]
-;; (tied wte). Its k loop dots two contiguous rows.
+;; Row-major flvector kernels. Conv1D uses x[n,in] · W[in,out] + b[out].
+;; The tied head reads W[out,in] without transposing. See docs/INFERENCE.md.
 
 (require racket/fixnum
          racket/flonum
@@ -31,9 +24,7 @@
 
 (define layernorm-eps 1e-5)
 
-;; Below this many flops (rows × inner × cols) the future setup costs
-;; more than the arithmetic. Per-head attention stays under it. The
-;; logits multiply and the MLP stay over it.
+;; Keep small products serial to avoid future setup costs.
 (define parallel-work-threshold 100000)
 
 (define (worker-budget n)
@@ -44,8 +35,7 @@
 ;; #f uses the host count. Budgets apply to matrix products, not heads.
 (define current-decode-workers (make-parameter #f worker-budget))
 (define current-prefill-workers (make-parameter #f worker-budget))
-;; Once a problem is large enough to parallelize, split rows when there
-;; are at least this many, and output columns otherwise.
+;; Split rows at this size; otherwise split output columns.
 (define parallel-axis-threshold 32)
 ;; One block per processor avoids dozens of tiny decode futures.
 (define parallel-block-multiple 1)
@@ -59,7 +49,7 @@
      (define e (flexp (fl* 2.0 x)))
      (fl/ (fl- e 1.0) (fl+ e 1.0))]))
 
-;; sqrt(2/π), decimal from an independent evaluation of that quantity.
+;; sqrt(2/π).
 (define gelu-k 0.7978845608028654)
 (define gelu-cubic 0.044715)
 
