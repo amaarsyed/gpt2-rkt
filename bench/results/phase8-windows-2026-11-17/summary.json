@@ -1,0 +1,112 @@
+{
+  "baseline_sha": "1ad7035e032273c6c520d8bf42a6ea4ba985bd6c",
+  "candidate_sha": "e8af302f4ce8245bae30974f609d11c20e66fa7a",
+  "racket": "Welcome to Racket v9.3 [cs].",
+  "date": "2026-11-17",
+  "cpu": "AMD Ryzen 5 8645HS",
+  "os": "windows",
+  "processors": 12,
+  "rounds": 3,
+  "warmup": 1,
+  "results": [
+    {
+      "kind": "load",
+      "size": 0,
+      "baseline_ms": 3167.6081999999997,
+      "phase8_ms": 2998.5069000000003,
+      "speedup": 1.0563951678750512,
+      "baseline_allocated_bytes": null,
+      "phase8_allocated_bytes": null,
+      "baseline_peak_bytes": 2255400960,
+      "phase8_peak_bytes": 2254388592
+    },
+    {
+      "kind": "prefill",
+      "size": 16,
+      "baseline_ms": 219.28769999999986,
+      "phase8_ms": 228.17020000000048,
+      "speedup": 0.9610707270274532,
+      "baseline_allocated_bytes": 195607472,
+      "phase8_allocated_bytes": 27601840,
+      "baseline_peak_bytes": 2255415312,
+      "phase8_peak_bytes": 2254342496
+    },
+    {
+      "kind": "prefill",
+      "size": 128,
+      "baseline_ms": 1176.6516999999994,
+      "phase8_ms": 1027.8737999999994,
+      "speedup": 1.1447433527345479,
+      "baseline_allocated_bytes": 503399392,
+      "phase8_allocated_bytes": 194194016,
+      "baseline_peak_bytes": 2255408784,
+      "phase8_peak_bytes": 2254373376
+    },
+    {
+      "kind": "prefill",
+      "size": 512,
+      "baseline_ms": 6135.564,
+      "phase8_ms": 5030.383800000001,
+      "speedup": 1.2197009699339438,
+      "baseline_allocated_bytes": 1837611072,
+      "phase8_allocated_bytes": 779014112,
+      "baseline_peak_bytes": 2255407792,
+      "phase8_peak_bytes": 2254384400
+    },
+    {
+      "kind": "prefill",
+      "size": 1000,
+      "baseline_ms": 15183.5786,
+      "phase8_ms": 10928.492900000001,
+      "speedup": 1.3893570448309482,
+      "baseline_allocated_bytes": 4572571728,
+      "phase8_allocated_bytes": 1551351184,
+      "baseline_peak_bytes": 2255381744,
+      "phase8_peak_bytes": 2254388176
+    },
+    {
+      "kind": "decode",
+      "size": 128,
+      "baseline_ms": 5838.216699999999,
+      "phase8_ms": 4583.6543,
+      "speedup": 1.2737035382445834,
+      "baseline_allocated_bytes": 1793805440,
+      "phase8_allocated_bytes": 625925216,
+      "baseline_peak_bytes": 2255400288,
+      "phase8_peak_bytes": 2254368720
+    },
+    {
+      "kind": "sample",
+      "size": 128,
+      "baseline_ms": 6824.0617999999995,
+      "phase8_ms": 4748.2448,
+      "speedup": 1.437175648568077,
+      "baseline_allocated_bytes": 2348516896,
+      "phase8_allocated_bytes": 782969120,
+      "baseline_peak_bytes": 2255399376,
+      "phase8_peak_bytes": 2254355344
+    },
+    {
+      "kind": "head",
+      "size": 1,
+      "baseline_ms": 7.77110000000016,
+      "phase8_ms": 7.511899999999969,
+      "speedup": 1.03450525166738,
+      "baseline_allocated_bytes": 811760,
+      "phase8_allocated_bytes": 801152,
+      "baseline_peak_bytes": 411126416,
+      "phase8_peak_bytes": 405179008
+    },
+    {
+      "kind": "square",
+      "size": 768,
+      "baseline_ms": 30.011600000000044,
+      "phase8_ms": 30.282300000000077,
+      "speedup": 0.9910607846828005,
+      "baseline_allocated_bytes": 5717392,
+      "phase8_allocated_bytes": 5508448,
+      "baseline_peak_bytes": 111840464,
+      "phase8_peak_bytes": 107170192
+    }
+  ]
+}

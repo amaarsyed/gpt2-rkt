@@ -1,6 +1,6 @@
 # gpt2-rkt
 
-Pure-Racket inference for GPT-2 Small (124M). Numeric work uses `flvector` and `racket/flonum`. On more than one processor, a matrix multiply of at least 100000 flops is split across rows when it has 32 or more rows, and across output columns otherwise. That still covers a single-token logits multiply. A smaller multiply stays in one thread, including the per-head products during single-token decode. Each split uses four times as many blocks as `processor-count`. Model weights are not in git.
+Pure-Racket inference for GPT-2 Small (124M). Numeric work uses `flvector` and `racket/flonum`. Large matrix products split across rows or output columns, with one block per processor. Attention computes only the visible causal prefix. Prefill can run heads in parallel; a decode query stays serial. Model weights are not in git.
 
 This is the 0.1.0 line. `generate` loads a GPT-2 directory, encodes the prompt, and writes each decoded token as it is chosen. A missing file names the asset and `sh tools/fetch-gpt2-vocab.sh`. The fetch script and the digest check reject a corrupt file; `load-model` checks shapes and keys, not the digest. `model.safetensors` is little-endian F32, read in place from the header offsets. Names may be bare (`wte.weight`) or prefixed with `transformer.`. The `attn.bias` and `attn.masked_bias` buffers are ignored. A `lm_head.weight` that matches `wte` is accepted and unused. The tiny model uses the same reader.
 
@@ -79,9 +79,17 @@ racket main.rkt generate \
 
 ## Numeric kernels
 
+The [phase 6 and phase 7 comparison](docs/PHASE6-vs-PHASE7.md) measures the two
+milestone merges on the same Windows machine with one shared driver. It records
+load, prefill, 128-token generation, matrix kernels, and memory, with raw samples
+and matching greedy token IDs. These results are separate from the VM reference.
+
+[Phase 8](docs/PHASE8.md) records the speed changes and an alternating comparison
+against the tree before those changes, including timed allocation counts.
+
 `src/tensor.rkt` is a row-major tensor on one `flvector`, with explicit dimensions. `src/nn.rkt` is the GPT-2 arithmetic:
 
-- `matmul` is Hugging Face Conv1D: `y[n, out] = x[n, in] · W[in, out] + b[out]`. The inner loop is i-k-j so each step reads a contiguous weight row. A product of at least 100000 flops with thirty-two or more rows is split across rows. A shorter product of that size is split across columns. Smaller products stay serial. Both splits use four blocks per core.
+- `matmul` is Hugging Face Conv1D: `y[n, out] = x[n, in] · W[in, out] + b[out]`. The inner loop is i-k-j so each step reads a contiguous weight row. A product of at least 100000 flops with thirty-two or more rows is split across rows. A shorter product of that size is split across columns. Smaller products stay serial. Both splits use one block per processor.
 - `matmul-transposed-b` is `h[n, in] · Wᵀ` with `W` stored as `[out, in]`, for tied-embedding logits. It does not allocate a transpose.
 - `tensor-add` is the residual add.
 - `softmax` is row-wise on the last axis. It subtracts the row max, and an all-masked row (every value `-inf.0`) is zeros.
@@ -95,13 +103,19 @@ racket main.rkt generate \
 
 `k` and `v` may be longer than `q`. Query row `i` is at position `rows(k) - rows(q) + i`, which is the same alignment as a past-key prefix: the new queries see the cached keys and not a later query in the same chunk. `attend` takes `#:kv-rows` so a buffer allocated to `n_positions` is not treated as a full sequence. The model writes each new key and value row into that buffer. A head reads its columns from the filled prefix with a column offset, so the prefix is not copied on every token.
 
+Each query computes and normalizes only its visible scores. A request-owned
+workspace reuses one score row per head across queries and layers. Large
+prefills give each head a future, with disjoint scratch and output columns.
+GELU and residual additions reuse fresh product buffers; caller inputs and
+returned trace tensors remain independent.
+
 ## Transformer block
 
 `gpt2-block` is pre-LN. Let `h = x + attn(ln_1(x))`. The block output is `h + mlp(ln_2(h))`. Both norms use biased variance and epsilon `1e-5`. The MLP is `c_fc` from the model width to the inner width, the tanh GELU, and `c_proj` back. For GPT-2 small those matrices are `[768, 3072]` and `[3072, 768]`. `gpt2-blocks` folds a list of blocks. The final norm is the same `layer-norm`.
 
 ## Inference
 
-`load-model` reads `config.json`, the tokenizer files, and little-endian F32 `model.safetensors`. It checks every tensor shape, names a missing or unexpected key, and records the load time and `current-memory-use` without collecting. The benchmark collects before it records the resident size. `tests/tiny-gpt2` is a 2-layer eager model in that format. `racket main.rkt generate --model-dir tests/tiny-gpt2 --prompt hi --max-new-tokens 4` prints its greedy continuation. `next-token-logits` and generation score only the last hidden row, and both use the cached forward pass. `model-generate` scores the prompt once, then one new token at a time. Generation allocates each layer's key and value buffer to `n_positions`. `next-token-logits` allocates only the prompt length. The buffers are updated in place, and a cache handle that has already been advanced cannot be passed again. It stops at `eos_token_id` (50256 when the config omits it) or at the requested count. The id list includes that eos token; the printed text does not. A UTF-8 character split across tokens stays buffered until the next token completes it, or until generation finishes, and the finished piece is written as soon as the token is chosen. Omit temperature for greedy decoding. A temperature of 0 or less is an error. A positive temperature subtracts the row max before dividing. `top-k` keeps the largest scores before the softmax. A seed is an integer from 0 through 2147483647 and uses a private generator. The prompt plus the new tokens must fit in `min(1024, n_positions)`. `position-embed` takes `#:start` so a cached token uses its absolute position. After the text, `generate` writes `load-seconds`, `load-bytes`, and `tokens-per-second` to the error port.
+`load-model` reads `config.json`, the tokenizer files, and little-endian F32 `model.safetensors`. It checks every tensor shape, names a missing or unexpected key, and records the load time and `current-memory-use` without collecting. The benchmark collects before it records the resident size. `tests/tiny-gpt2` is a 2-layer eager model in that format. `racket main.rkt generate --model-dir tests/tiny-gpt2 --prompt hi --max-new-tokens 4` prints its greedy continuation. `next-token-logits` and generation score only the last hidden row, and both use the cached forward pass. `model-generate` scores the prompt once, then one new token at a time. Generation sizes each layer's key and value buffers to the prompt plus the requested new tokens. `next-token-logits` allocates only the prompt length. The buffers are updated in place, and a cache handle that has already been advanced cannot be passed again. It stops at `eos_token_id` (50256 when the config omits it) or at the requested count. The id list includes that eos token; the printed text does not. A UTF-8 character split across tokens stays buffered until the next token completes it, or until generation finishes, and the finished piece is written as soon as the token is chosen. Omit temperature for greedy decoding. A temperature of 0 or less is an error. A positive temperature subtracts the row max before dividing. `top-k` keeps the largest scores before the softmax. A seed is an integer from 0 through 2147483647 and uses a private generator. The prompt plus the new tokens must fit in `min(1024, n_positions)`. `position-embed` takes `#:start` so a cached token uses its absolute position. After the text, `generate` writes `load-seconds`, `load-bytes`, and `tokens-per-second` to the error port.
 
 ## Tokenizer and embeddings
 

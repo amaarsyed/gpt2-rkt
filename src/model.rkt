@@ -10,6 +10,7 @@
          racket/flonum
          racket/list
          racket/string
+         "attention.rkt"
          "block.rkt"
          "embed.rkt"
          "errors.rkt"
@@ -59,7 +60,7 @@
 ;; live is a box of this handle's position. model-forward clears it, so
 ;; the same handle cannot be advanced twice: the buffers are mutated in
 ;; place and a second call would overwrite the rows just written.
-(struct kv-cache (layers position live) #:transparent)
+(struct kv-cache (layers position live work) #:transparent)
 
 ;; One preallocated key/value buffer per layer. The shared position on
 ;; kv-cache is how many rows have been written.
@@ -97,7 +98,11 @@
      (layer-cache (make-tensor (list n d) (make-flvector (* n d) 0.0))
                   (make-tensor (list n d) (make-flvector (* n d) 0.0))))
    0
-   (box 0)))
+   (box 0)
+   (make-attention-work
+    (for/fold ([heads 1]) ([params (in-list (gpt2-model-blocks model))])
+      (max heads (block-params-n-head params)))
+    n)))
 
 (define (context-limit model)
   (min gpt2-context-length (gpt2-model-n-positions model)))
@@ -157,7 +162,8 @@
                            params
                            (layer-cache-k past)
                            (layer-cache-v past)
-                           #:filled start))
+                           #:filled start
+                           #:workspace (kv-cache-work cache)))
       (values out
               (cons (layer-cache k v) acc)
               (if trace (cons out outs) outs))))
@@ -167,7 +173,7 @@
         (tensor-row hidden (sub1 (car (tensor-dims hidden))))
         hidden))
   (define logits (tied-logits scored (gpt2-model-wte model)))
-  (define returned (kv-cache (reverse layers) (+ start n) (box (+ start n))))
+  (define returned (kv-cache (reverse layers) (+ start n) (box (+ start n)) (kv-cache-work cache)))
   (when trace
     (set-box! trace
               (activation-trace embed
@@ -210,12 +216,39 @@
   (unless (and (exact-positive-integer? k) (<= k n))
     (raise-gpt2
      (format "top-k must be from 1 through the vocabulary size ~a" n)))
-  (define order
-    (sort (range n)
-          (lambda (i j)
-            (fl> (flvector-ref logits i) (flvector-ref logits j)))))
+  ;; The root is the worst retained ID. Ties keep the lower ID, as the
+  ;; stable full sort did, without sorting the entire vocabulary.
+  (define heap (make-vector k 0))
+  (define (worse? i j)
+    (define a (flvector-ref logits i))
+    (define b (flvector-ref logits j))
+    (or (fl< a b) (and (fl= a b) (> i j))))
+  (define (swap! i j)
+    (define id (vector-ref heap i))
+    (vector-set! heap i (vector-ref heap j))
+    (vector-set! heap j id))
+  (for ([i (in-range n)])
+    (cond
+      [(< i k)
+       (vector-set! heap i i)
+       (let up ([j i])
+         (define parent (quotient (sub1 j) 2))
+         (when (and (> j 0) (worse? (vector-ref heap j) (vector-ref heap parent)))
+           (swap! j parent)
+           (up parent)))]
+      [(worse? (vector-ref heap 0) i)
+       (vector-set! heap 0 i)
+       (let down ([j 0])
+         (define left (+ (* j 2) 1))
+         (when (< left k)
+           (define right (add1 left))
+           (define child (if (and (< right k) (worse? (vector-ref heap right) (vector-ref heap left)))
+                             right left))
+           (when (worse? (vector-ref heap child) (vector-ref heap j))
+             (swap! j child)
+             (down child))))]))
   (define out (make-flvector n -inf.0))
-  (for ([i (in-list (take order k))])
+  (for ([i (in-vector heap)])
     (flvector-set! out i (flvector-ref logits i)))
   out)
 
@@ -295,15 +328,15 @@
         (display piece out)
         (flush-output out))))
   (define-values (first-logits cache)
-    (model-forward model ids (empty-kv-cache model) #:last-only #t))
+    (model-forward model ids (empty-kv-cache model #:capacity total) #:last-only #t))
   (define first (choose (last-row first-logits)))
   (emit-id first)
   (define new
     (let loop ([cache cache] [chosen first] [acc (list first)] [left (sub1 max-new)])
       (if (or (zero? left) (and stop-at-eos? (= chosen eos)))
           (reverse acc)
-            (let-values ([(logits cache)
-                          (model-forward model (list chosen) cache #:last-only #t)])
+          (let-values ([(logits cache)
+                        (model-forward model (list chosen) cache #:last-only #t)])
             (define nxt (choose (last-row logits)))
             (emit-id nxt)
             (loop cache nxt (cons nxt acc) (sub1 left))))))
@@ -390,9 +423,17 @@
     (define vocab (config-int cfg 'vocab_size #f))
     (unless (and n-layer n-embd n-head n-positions vocab)
       (raise-gpt2 "config.json is missing n_layer, n_embd, n_head, n_positions, or vocab_size"))
+    (for ([key (in-list '(n_layer n_embd n_head n_positions vocab_size))]
+          [value (in-list (list n-layer n-embd n-head n-positions vocab))])
+      (unless (if (eq? key 'n_layer) (>= value 0) (> value 0))
+        (raise-gpt2
+         (format "config ~a must be ~a integer"
+                 key (if (eq? key 'n_layer) "a nonnegative" "a positive")))))
     (unless (zero? (remainder n-embd n-head))
       (raise-gpt2 (format "n_embd ~a is not divisible by n_head ~a" n-embd n-head)))
     (define n-inner (or (config-int cfg 'n_inner #f) (* 4 n-embd)))
+    (unless (> n-inner 0)
+      (raise-gpt2 "config n_inner must be a positive integer"))
     (define tok (load-tokenizer (build-path model-dir "vocab.json")
                                 (build-path model-dir "merges.txt")))
     (define raw (read-safetensors (build-path model-dir "model.safetensors")

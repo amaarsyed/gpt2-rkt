@@ -2,8 +2,7 @@
 
 ;; Minimal safetensors reader: an 8-byte little-endian header length,
 ;; a JSON header, then raw little-endian F32 bytes. Other dtypes are
-;; rejected. This is the format load-model reads, so the real GPT-2
-;; file can use the same function later.
+;; rejected. load-model uses this reader for both GPT-2 and the tiny model.
 
 (require json
          racket/flonum
@@ -73,7 +72,7 @@
          (raise-gpt2 (format "safetensors dtype ~a is not F32: ~a" dtype name)))
        (define shape (hash-ref info 'shape #f))
        (define offsets (hash-ref info 'data_offsets #f))
-       (unless (and (list? shape) (andmap read-exact-integer shape))
+       (unless (and (list? shape) (pair? shape) (andmap read-exact-integer shape))
          (raise-gpt2 (format "safetensors shape is invalid: ~a" name)))
        (unless (and (list? offsets) (= (length offsets) 2))
          (raise-gpt2 (format "safetensors offsets are invalid: ~a" name)))
