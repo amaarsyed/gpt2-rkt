@@ -178,8 +178,6 @@
          (fill-matmul! y xdata wdata bdata in out 0 n j0 j1)))])
   (make-tensor (list n out) y))
 
-;; y[i, j] = sum_k h[i, k] * W[j, k], W stored [out, in].
-;; i is in [i0, i1) and j is in [j0, j1).
 (define (dot-row h hbase W wbase in)
   (let loop-k ([k 0] [sum 0.0])
     (if (unsafe-fx= k in)
@@ -189,6 +187,8 @@
                             (unsafe-fl* (unsafe-flvector-ref h (unsafe-fx+ hbase k))
                                         (unsafe-flvector-ref W (unsafe-fx+ wbase k))))))))
 
+;; y[i, j] = sum_k h[i, k] * W[j, k], W stored [out, in].
+;; i is in [i0, i1) and j is in [j0, j1).
 (define (fill-transposed! y h W in out i0 i1 j0 j1)
   (let loop-i ([i i0])
     (unless (unsafe-fx= i i1)
