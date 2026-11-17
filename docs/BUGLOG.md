@@ -34,7 +34,7 @@ Defects found while building gpt2-rkt. Add one row per bug.
 
 ## Anticipated risks verified
 
-Risks called out before implementation. The code already matched the intended behavior, and the test locks it.
+Rollup for M0 through M7. Each row was called out before the code landed, or checked when a milestone closed. The test locks it.
 
 | Risk | Result | Test |
 | --- | --- | --- |
@@ -67,5 +67,8 @@ Risks called out before implementation. The code already matched the intended be
 | A missing key might surface as a contract error | The message names the tensor | `tests/model.rkt`: "a transposed c_attn, a missing key, and an extra key are named" |
 | A wrong commit or hash might be accepted | A digest mismatch names the file and `sh tools/fetch-gpt2-vocab.sh`. The four pinned files match | `tests/model.rkt`: "a sha256 mismatch names the file and the fetch command"; `tests/gpt2-small.rkt`: "the pinned files match the published digests" |
 | The 1024 limit might ignore the loaded `n_positions` | The loaded model has 1024 positions, equal to `gpt2-context-length`. 1025 tokens name 1024 and do not run the forward pass | `tests/gpt2-small.rkt`: "the official header is unaligned and the mask buffers are ignored" |
-| The 1e-3 block 11 gap might be a bug in the forward pass | A float64 reference of the same last rows matches to about 1e-13. The gap is the fp32 reference. The plan bar stays, and the float64 row is checked at `1e-6 + 1e-8·|e|` | `tests/gpt2-small.rkt`: "eager hidden states, logits, and greedy tokens match" |
+| The 1e-3 block 11 gap might be a bug in the forward pass | A float64 reference of the same last rows matches to about 1e-13. The gap is the fp32 reference. The plan bar stays, and the float64 row is checked at `1e-6 + 1e-8·\|e\|` | `tests/gpt2-small.rkt`: "eager hidden states, logits, and greedy tokens match" |
+| The benchmark might produce different token ids on each run | Greedy decoding of a fixed prompt and seed. A timed run that disagrees with the warmup is an error | `tests/bench.rkt`: "greedy ids are the same on every call" |
+| Peak memory might combine several configurations in one process | Each configuration is a child process, and the report rejects a repeated pid | `tests/bench.rkt`: "each configuration is a different process" |
+| The recorded CPU name might be empty on macOS or Linux | Linux reads `model name` from `/proc/cpuinfo`. macOS reads `sysctl -n machdep.cpu.brand_string`. A blank reading is not used | `tests/harness.rkt`: "the CPU name is the Linux model or the macOS brand string"; `tests/bench.rkt`: "the CPU name is non-empty on this host" |
 | A cache handle might be advanced twice, so the second call overwrites the first call's rows | The handle's box is cleared when the forward starts. The returned cache is the one that continues | `tests/model.rkt`: "a kv cache is sized to the call and cannot be advanced twice" |
