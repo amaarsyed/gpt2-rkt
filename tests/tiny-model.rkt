@@ -3,6 +3,7 @@
 (module+ test
   (require json
            racket/flonum
+           racket/port
            racket/runtime-path
            racket/string
            rackunit
@@ -78,4 +79,22 @@
                    (generation-text
                     (model-generate model prompt-ids (hash-ref ref 'max_new_tokens)))
                    "\n")))
+
+  (test-case "tokens are written as they are chosen"
+    (define model (load-model tiny-dir))
+    (define chunks '())
+    (define port
+      (make-output-port
+       'capture
+       always-evt
+       (lambda (bstr start end non-block? breakable?)
+         (define piece (bytes->string/utf-8 (subbytes bstr start end)))
+         (unless (string=? piece "")
+           (set! chunks (cons piece chunks)))
+         (- end start))
+       void))
+    (define result (model-generate model '(104 105) 4 #:output-port port))
+    (check-true (> (length chunks) 1))
+    (check-equal? (apply string-append (reverse chunks))
+                  (generation-text result)))
   )
