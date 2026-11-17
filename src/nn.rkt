@@ -1,7 +1,7 @@
 #lang racket/base
 
 ;; Row-major flvector kernels. Conv1D uses x[n,in] · W[in,out] + b[out].
-;; The tied head reads W[out,in] without transposing. See docs/INFERENCE.md.
+;; The tied head reads W[out,in] without transposing. See docs/ARCHITECTURE.md.
 
 (require racket/fixnum
          racket/flonum
