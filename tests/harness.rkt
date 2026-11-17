@@ -5,6 +5,7 @@
            racket/flonum
            racket/string
            "../bench/harness.rkt"
+           "../bench/machine.rkt"
            "../src/nn.rkt"
            "../src/tensor.rkt")
 
@@ -76,9 +77,26 @@
     (check-regexp-match #px"matmul-peak-before-gc-bytes: " text)
     (check-regexp-match #px"median of 5" text)
     (check-regexp-match #px"machine: os=" text)
+    (check-regexp-match #px"physical-cpu=" text)
+    (check-regexp-match #px"ncpu=" text)
     (define-values (x W b)
       (let ([data (make-flvector 64 1.0)])
         (values (make-tensor '(8 8) data)
                 (make-tensor '(8 8) (make-flvector 64 1.0))
                 (make-tensor '(8) (make-flvector 8 0.0)))))
-    (check-equal? (tensor-ref (matmul x W b) 3 4) 8.0)))
+    (check-equal? (tensor-ref (matmul x W b) 3 4) 8.0))
+
+  (test-case "the CPU name is the Linux model or the macOS brand string"
+    (check-equal? (cpu-name-from "Intel(R) Xeon(R) Processor" "Apple M5 Pro")
+                  "Intel(R) Xeon(R) Processor")
+    (check-equal? (cpu-name-from #f "Apple M5 Pro") "Apple M5 Pro")
+    (check-equal? (cpu-name-from "" "  Apple M5 Pro  ") "Apple M5 Pro")
+    (check-equal? (cpu-name-from "   " "") #f)
+    (define live (host-cpu-name))
+    (check-true (non-empty-string? live))
+    (check-false (string=? live "unknown"))
+    (check-equal? (git-sha-or-unknown #f #t "abc") "unknown")
+    (check-equal? (git-sha-or-unknown "/usr/bin/git" #f "abc") "unknown")
+    (check-equal? (git-sha-or-unknown "/usr/bin/git" #t "  abc  ") "abc")
+    (check-true (string? (host-git-sha)))
+    (check-false (string=? (host-git-sha) "false"))))

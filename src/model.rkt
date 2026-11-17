@@ -56,11 +56,14 @@
   #:constructor-name raw-gpt2
   #:transparent)
 
-(struct kv-cache (layers position) #:transparent)
+;; live is a box of this handle's position. model-forward clears it, so
+;; the same handle cannot be advanced twice: the buffers are mutated in
+;; place and a second call would overwrite the rows just written.
+(struct kv-cache (layers position live) #:transparent)
 
-;; One preallocated key/value buffer per layer. filled is the number of
-;; rows written. The next step updates these buffers in place.
-(struct layer-cache (k v filled) #:transparent)
+;; One preallocated key/value buffer per layer. The shared position on
+;; kv-cache is how many rows have been written.
+(struct layer-cache (k v) #:transparent)
 
 (struct generation (token-ids text) #:transparent)
 
@@ -82,15 +85,19 @@
             eos-id
             wte wpe blocks ln-gain ln-bias tokenizer))
 
-(define (empty-kv-cache model)
-  (define n (gpt2-model-n-positions model))
+(define (empty-kv-cache model #:capacity [capacity #f])
+  (define npos (gpt2-model-n-positions model))
+  (define n (or capacity npos))
+  (unless (and (exact-positive-integer? n) (<= n npos))
+    (raise-gpt2
+     (format "kv cache capacity must be from 1 through n_positions (~a)" npos)))
   (define d (gpt2-model-n-embd model))
   (kv-cache
    (for/list ([_ (in-list (gpt2-model-blocks model))])
      (layer-cache (make-tensor (list n d) (make-flvector (* n d) 0.0))
-                  (make-tensor (list n d) (make-flvector (* n d) 0.0))
-                  0))
-   0))
+                  (make-tensor (list n d) (make-flvector (* n d) 0.0))))
+   0
+   (box 0)))
 
 (define (context-limit model)
   (min gpt2-context-length (gpt2-model-n-positions model)))
@@ -115,34 +122,34 @@
   (when (null? ids)
     (raise-gpt2 "model-activations needs at least one token"))
   (check-context 'model-activations (length ids) (context-limit model))
-  (define embed (input-embed (gpt2-model-wte model)
-                             (gpt2-model-wpe model)
-                             ids))
-  (define-values (final blocks)
-    (for/fold ([hidden embed] [outs '()])
-              ([params (in-list (gpt2-model-blocks model))])
-      (define out (gpt2-block hidden params))
-      (values out (cons out outs))))
-  (define hidden (layer-norm final
-                             (gpt2-model-ln-gain model)
-                             (gpt2-model-ln-bias model)))
-  (define last (tensor-row hidden (sub1 (car (tensor-dims hidden)))))
-  (activation-trace embed (reverse blocks) hidden (tied-logits last (gpt2-model-wte model))))
+  (define trace (box #f))
+  (define-values (_logits _cache)
+    (model-forward model ids
+                   (empty-kv-cache model #:capacity (length ids))
+                   #:last-only #t
+                   #:trace trace))
+  (unbox trace))
 
-(define (model-forward model ids cache #:last-only [last-only #f])
+(define (model-forward model ids cache #:last-only [last-only #f] #:trace [trace #f])
   (unless (gpt2-model? model)
     (raise-argument-error 'model-forward "gpt2-model?" model))
   (unless (and (list? ids) (andmap exact-nonnegative-integer? ids))
     (raise-argument-error 'model-forward "list of token ids?" ids))
+  (unless (kv-cache? cache)
+    (raise-argument-error 'model-forward "kv-cache?" cache))
   (define start (kv-cache-position cache))
+  (define live (kv-cache-live cache))
+  (unless (and (box? live) (equal? (unbox live) start))
+    (raise-gpt2 "kv cache was already advanced and cannot be reused"))
   (define n (length ids))
   (check-context 'model-forward (+ start n) (context-limit model))
-  (define x (input-embed (gpt2-model-wte model)
-                         (gpt2-model-wpe model)
-                         ids
-                         #:start start))
-  (define-values (y layers)
-    (for/fold ([hidden x] [acc '()])
+  (set-box! live #f)
+  (define embed (input-embed (gpt2-model-wte model)
+                             (gpt2-model-wpe model)
+                             ids
+                             #:start start))
+  (define-values (y layers outs)
+    (for/fold ([hidden embed] [acc '()] [outs '()])
               ([params (in-list (gpt2-model-blocks model))]
                [past (in-list (kv-cache-layers cache))])
       (define-values (out k v)
@@ -150,32 +157,42 @@
                            params
                            (layer-cache-k past)
                            (layer-cache-v past)
-                           #:filled (layer-cache-filled past)))
-      (values out (cons (layer-cache k v (+ (layer-cache-filled past) n)) acc))))
+                           #:filled start))
+      (values out
+              (cons (layer-cache k v) acc)
+              (if trace (cons out outs) outs))))
   (define hidden (layer-norm y (gpt2-model-ln-gain model) (gpt2-model-ln-bias model)))
   (define scored
     (if last-only
         (tensor-row hidden (sub1 (car (tensor-dims hidden))))
         hidden))
-  (values (tied-logits scored (gpt2-model-wte model))
-          (kv-cache (reverse layers) (+ start n))))
+  (define logits (tied-logits scored (gpt2-model-wte model)))
+  (define returned (kv-cache (reverse layers) (+ start n) (box (+ start n))))
+  (when trace
+    (set-box! trace
+              (activation-trace embed
+                                (reverse outs)
+                                hidden
+                                (if last-only
+                                    logits
+                                    (tied-logits (tensor-row hidden (sub1 (car (tensor-dims hidden))))
+                                                 (gpt2-model-wte model))))))
+  (values logits returned))
 
 (define (last-row logits)
   (define dims (tensor-dims logits))
-  (define rows (car dims))
   (define cols (cadr dims))
-  (define src (tensor-data logits))
-  (define out (make-flvector cols))
-  (define base (* (sub1 rows) cols))
-  (for ([j (in-range cols)])
-    (flvector-set! out j (flvector-ref src (+ base j))))
-  out)
+  (define base (* (sub1 (car dims)) cols))
+  (flvector-copy (tensor-data logits) base (+ base cols)))
 
 (define (next-token-logits model ids)
   (when (null? ids)
     (raise-gpt2 "next-token-logits needs at least one token"))
+  (check-context 'next-token-logits (length ids) (context-limit model))
   (define-values (logits _cache)
-    (model-forward model ids (empty-kv-cache model) #:last-only #t))
+    (model-forward model ids
+                   (empty-kv-cache model #:capacity (length ids))
+                   #:last-only #t))
   (last-row logits))
 
 (define (argmax logits)
@@ -239,7 +256,8 @@
                         #:temperature [temperature #f]
                         #:top-k [top-k #f]
                         #:seed [seed #f]
-                        #:output-port [out #f])
+                        #:output-port [out #f]
+                        #:stop-at-eos? [stop-at-eos? #t])
   (unless (exact-positive-integer? max-new)
     (raise-gpt2 "max-new-tokens must be an integer >= 1"))
   (when (null? ids)
@@ -282,7 +300,7 @@
   (emit-id first)
   (define new
     (let loop ([cache cache] [chosen first] [acc (list first)] [left (sub1 max-new)])
-      (if (or (zero? left) (= chosen eos))
+      (if (or (zero? left) (and stop-at-eos? (= chosen eos)))
           (reverse acc)
             (let-values ([(logits cache)
                           (model-forward model (list chosen) cache #:last-only #t)])
@@ -318,8 +336,12 @@
       (substring name (string-length "transformer."))
       name))
 
-(define (ignored-mask? name)
-  (regexp-match? #rx"(?:^|\\.)attn\\.bias$" (canonical-weight-name name)))
+;; attn.bias is the causal mask, stored and ignored. Older exports also
+;; carry attn.masked_bias, a one-element buffer, which is ignored too.
+(define (ignored-buffer? name)
+  (define key (canonical-weight-name name))
+  (or (regexp-match? #rx"(?:^|\\.)attn\\.bias$" key)
+      (regexp-match? #rx"(?:^|\\.)attn\\.masked_bias$" key)))
 
 (define (expected-weight-names n-layer)
   (append '("wte.weight" "wpe.weight" "ln_f.weight" "ln_f.bias")
@@ -374,7 +396,7 @@
     (define tok (load-tokenizer (build-path model-dir "vocab.json")
                                 (build-path model-dir "merges.txt")))
     (define raw (read-safetensors (build-path model-dir "model.safetensors")
-                                  #:skip ignored-mask?))
+                                  #:skip ignored-buffer?))
     (define weights
       (for/fold ([table (hash)]) ([(name tensor) (in-hash raw)])
         (define key (canonical-weight-name name))
@@ -382,6 +404,14 @@
           (raise-gpt2 (format "duplicate tensor: ~a" key)))
         (hash-set table key tensor)))
     (define names (expected-weight-names n-layer))
+    (define lm-head (hash-ref weights "lm_head.weight" #f))
+    (when lm-head
+      (define wte (hash-ref weights "wte.weight" #f))
+      (unless (and wte
+                   (equal? (tensor-dims lm-head) (tensor-dims wte))
+                   (equal? (tensor-data lm-head) (tensor-data wte)))
+        (raise-gpt2 "lm_head.weight is not tied to wte.weight"))
+      (set! weights (hash-remove weights "lm_head.weight")))
     (define missing
       (filter (lambda (name) (not (hash-ref weights name #f))) names))
     (unless (null? missing)
@@ -412,7 +442,8 @@
 (define (load-model model-dir)
   (define started (current-inexact-milliseconds))
   (define model (load-model-file model-dir))
-  (current-load-report
-   (load-report (/ (- (current-inexact-milliseconds) started) 1000.0)
-                (current-memory-use)))
+  (define seconds (/ (- (current-inexact-milliseconds) started) 1000.0))
+  ;; No collection here. Callers that want the resident size, including
+  ;; the benchmark, collect before they read current-memory-use.
+  (current-load-report (load-report seconds (current-memory-use)))
   model)

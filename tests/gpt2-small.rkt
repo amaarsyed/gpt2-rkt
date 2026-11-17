@@ -1,7 +1,8 @@
 #lang racket/base
 
-;; Compare GPT-2 Small with the pinned eager fixture. The acceptance
-;; bar is |a-e| <= 1e-3 + 1e-4*|e|. Missing assets skip the module so a
+;; Compare GPT-2 Small with the pinned eager fixture. The fp32 acceptance
+;; bar is |a-e| <= 1e-3 + 1e-4*|e|. The float64 last row is also checked
+;; at |a-e| <= 1e-6 + 1e-8*|e|. Missing assets skip the module so a
 ;; checkout without the download still passes.
 
 (module+ test
@@ -47,6 +48,24 @@
               (hash-set table (cadr parts) (car parts))
               table)))))
 
+  ;; Measured last-row error against the float64 reference is about 1e-13.
+  (define f64-abs-tol 1e-6)
+  (define f64-rel-tol 1e-8)
+
+  (define (last-row-values tensor)
+    (define rows (car (tensor-dims tensor)))
+    (define cols (cadr (tensor-dims tensor)))
+    (define data (tensor-data tensor))
+    (define base (* (sub1 rows) cols))
+    (for/list ([j (in-range cols)])
+      (flvector-ref data (+ base j))))
+
+  (define (max-gap got expected abs-tol rel-tol)
+    (for/fold ([worst 0.0]) ([g (in-list got)] [e (in-list expected)])
+      (define ev (real->double-flonum e))
+      (check-true (within-tolerance? (list g) (list ev) #:abs abs-tol #:rel rel-tol))
+      (max worst (abs (- g ev)))))
+
   (define (stage-error got stats)
     (define data (tensor-data got))
     (define n (flvector-length data))
@@ -55,19 +74,24 @@
                 ([i (in-range n)])
         (define v (flvector-ref data i))
         (values (min mn v) (max mx v) (+ sum v))))
-    (define pairs
-      (cons (list mn (hash-ref stats 'min))
-            (cons (list mx (hash-ref stats 'max))
-                  (cons (list (/ sum n) (hash-ref stats 'mean))
-                        (for/list ([sample (in-list (hash-ref stats 'samples))])
-                          (list (flvector-ref data (hash-ref sample 'i))
-                                (hash-ref sample 'v)))))))
     (check-equal? n (hash-ref stats 'count))
-    (for/fold ([worst 0.0]) ([pair (in-list pairs)])
-      (define got-v (car pair))
-      (define exp-v (real->double-flonum (cadr pair)))
-      (check-true (within-tolerance? (list got-v) (list exp-v)))
-      (max worst (abs (- got-v exp-v)))))
+    (define plan
+      (max (max-gap (list mn mx (/ sum n))
+                    (list (hash-ref stats 'min)
+                          (hash-ref stats 'max)
+                          (hash-ref stats 'mean))
+                    m6-abs-tol
+                    m6-rel-tol)
+           (max-gap (last-row-values got)
+                    (hash-ref stats 'last_row)
+                    m6-abs-tol
+                    m6-rel-tol)))
+    (define tight
+      (max-gap (last-row-values got)
+               (hash-ref stats 'last_row_f64)
+               f64-abs-tol
+               f64-rel-tol))
+    (values plan tight))
 
   (cond
     [(not (andmap asset-ready? required-model-asset-names))
@@ -115,20 +139,30 @@
          (define trace (model-activations model ids))
          (define stages (hash-ref prompt 'stages))
          (define blocks (activation-trace-blocks trace))
+         (define (stage-pair label tensor key)
+           (define-values (plan tight) (stage-error tensor (hash-ref stages key)))
+           (list label plan tight))
          (define worsts
-           (list (list "embed" (stage-error (activation-trace-embed trace) (hash-ref stages 'embed)))
-                 (list "block0" (stage-error (list-ref blocks 0) (hash-ref stages 'block0)))
-                 (list "block5" (stage-error (list-ref blocks 5) (hash-ref stages 'block5)))
-                 (list "block11" (stage-error (list-ref blocks 11) (hash-ref stages 'block11)))
-                 (list "ln_f" (stage-error (activation-trace-ln-f trace) (hash-ref stages 'ln_f)))))
+           (list (stage-pair "embed" (activation-trace-embed trace) 'embed)
+                 (stage-pair "block0" (list-ref blocks 0) 'block0)
+                 (stage-pair "block5" (list-ref blocks 5) 'block5)
+                 (stage-pair "block11" (list-ref blocks 11) 'block11)
+                 (stage-pair "ln_f" (activation-trace-ln-f trace) 'ln_f)))
          (define logits (tensor-data (activation-trace-logits trace)))
          (define logit-worst
-           (for/fold ([worst 0.0]) ([item (in-list (hash-ref prompt 'top_logits))])
-             (define got (flvector-ref logits (hash-ref item 'i)))
-             (define exp-v (real->double-flonum (hash-ref item 'v)))
-             (check-true (within-tolerance? (list got) (list exp-v)))
-             (max worst (abs (- got exp-v)))))
-         (printf "~a stage max-abs ~a logit max-abs ~a\n" text worsts logit-worst)
+           (max-gap (for/list ([item (in-list (hash-ref prompt 'top_logits))])
+                      (flvector-ref logits (hash-ref item 'i)))
+                    (map (lambda (item) (hash-ref item 'v)) (hash-ref prompt 'top_logits))
+                    m6-abs-tol
+                    m6-rel-tol))
+         (define logit-f64
+           (max-gap (for/list ([item (in-list (hash-ref prompt 'top_logits_f64))])
+                      (flvector-ref logits (hash-ref item 'i)))
+                    (map (lambda (item) (hash-ref item 'v)) (hash-ref prompt 'top_logits_f64))
+                    f64-abs-tol
+                    f64-rel-tol))
+         (printf "~a stage plan/f64 ~a logit plan ~a logit f64 ~a\n"
+                 text worsts logit-worst logit-f64)
          (define started (current-inexact-milliseconds))
          (define generated
            (generation-token-ids
