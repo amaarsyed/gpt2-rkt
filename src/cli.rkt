@@ -24,7 +24,7 @@
    (opt 'max-new-tokens "N" 'number #t
         "Number of tokens to generate (integer >= 1)")
    (opt 'temperature "T" 'number #f
-        "Sampling temperature (number >= 0). Omit or 0 for greedy decoding")
+        "Sampling temperature (finite number > 0). Omit for greedy decoding")
    (opt 'top-k "K" 'number #f
         "Keep the K most likely tokens (integer >= 1). Requires temperature > 0")
    (opt 'seed "S" 'number #f
@@ -184,7 +184,7 @@
         (display generate-help-text out)
         0]
        [else
-        (generate parsed)
+        (generate parsed #:output-port out)
         0])]
     [else
      (raise-gpt2
