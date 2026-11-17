@@ -68,8 +68,7 @@
          gpt2-attention
          gpt2-mlp
          gpt2-block
-         gpt2-blocks
-         gpt2-ln-f)
+         gpt2-blocks)
 
 (module+ main
   (exit (run-cli (current-command-line-arguments))))

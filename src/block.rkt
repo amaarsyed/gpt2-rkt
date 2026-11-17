@@ -22,8 +22,7 @@
          block-trace-out
          gpt2-block-parts
          gpt2-block
-         gpt2-blocks
-         gpt2-ln-f)
+         gpt2-blocks)
 
 (struct block-params (n-head
                       ln1-gain ln1-bias
@@ -123,6 +122,3 @@
     (raise-argument-error 'gpt2-blocks "list?" params-list))
   (for/fold ([hidden x]) ([params (in-list params-list)])
     (gpt2-block hidden params)))
-
-(define (gpt2-ln-f x gain bias)
-  (layer-norm x gain bias))
