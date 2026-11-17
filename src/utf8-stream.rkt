@@ -6,7 +6,8 @@
 
 (provide make-utf8-stream
          utf8-stream-add
-         utf8-stream-finish)
+         utf8-stream-finish
+         utf8-stream-text)
 
 (struct utf8-stream (pending emitted)
   #:mutable
@@ -63,5 +64,3 @@
 
 (define (utf8-stream-text stream)
   (utf8-stream-emitted stream))
-
-(provide utf8-stream-text)

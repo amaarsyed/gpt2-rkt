@@ -2,8 +2,7 @@
 
 ;; Minimal safetensors reader: an 8-byte little-endian header length,
 ;; a JSON header, then raw little-endian F32 bytes. Other dtypes are
-;; rejected. This is the format load-model reads, so the real GPT-2
-;; file can use the same function later.
+;; rejected. load-model uses this reader for both GPT-2 and the tiny model.
 
 (require json
          racket/flonum
