@@ -17,6 +17,8 @@
          "tensor.rkt")
 
 (provide matmul
+         matmul-gelu
+         matmul-add
          matmul-column-block
          matmul-transposed-b
          matmul-transposed-block
@@ -178,6 +180,24 @@
     (lambda (i0 i1 j0 j1)
       (fill-matmul! y xdata wdata bdata in out i0 i1 j0 j1 out 0)))
   (make-tensor (list n out) y))
+
+;; These products own their output, so the following pass can reuse it.
+(define (matmul-gelu x W b)
+  (define out (matmul x W b))
+  (define data (tensor-data out))
+  (for ([i (in-range (flvector-length data))])
+    (flvector-set! data i (flgelu (flvector-ref data i))))
+  out)
+
+(define (matmul-add x W b residual)
+  (define out (matmul x W b))
+  (unless (and (tensor? residual) (equal? (tensor-dims out) (tensor-dims residual)))
+    (raise-argument-error 'matmul-add "residual with the output shape" residual))
+  (define data (tensor-data out))
+  (define r (tensor-data residual))
+  (for ([i (in-range (flvector-length data))])
+    (flvector-set! data i (fl+ (flvector-ref r i) (flvector-ref data i))))
+  out)
 
 ;; The same product, reading columns [col, col+width) of a wider W and
 ;; only the leading (tensor columns of x) rows. Attention uses this so a

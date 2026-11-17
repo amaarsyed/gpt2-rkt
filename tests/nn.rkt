@@ -37,6 +37,20 @@
     (check-equal? (tensor-dims empty-rows) '(0 2))
     (check-equal? (elements empty-rows) '()))
 
+  (test-case "product post-processing leaves its inputs and earlier results alone"
+    (define x (make-tensor '(2 2) (flvector 1.0 -2.0 3.0 -4.0)))
+    (define W (make-tensor '(2 2) (flvector 0.1 0.2 0.3 0.4)))
+    (define b (make-tensor '(2) (flvector 0.1 -0.1)))
+    (define residual (make-tensor '(2 2) (flvector -1.0 2.0 -3.0 4.0)))
+    (define expected (matmul x W b))
+    (check-equal? (elements (matmul-gelu x W b)) (elements (gelu expected)))
+    (define out (matmul-add x W b residual))
+    (check-equal? (elements out) (elements (tensor-add residual expected)))
+    (matmul-gelu x W b)
+    (check-equal? (elements out) (elements (tensor-add residual expected)))
+    (check-equal? (elements x) '(1.0 -2.0 3.0 -4.0))
+    (check-equal? (elements residual) '(-1.0 2.0 -3.0 4.0)))
+
   (test-case "matmul reports shapes when the contraction does not match"
     (define x (make-tensor '(2 3) (flvector 1.0 2.0 3.0 4.0 5.0 6.0)))
     (define W (make-tensor '(2 2) (flvector 1.0 0.0 0.0 1.0)))
