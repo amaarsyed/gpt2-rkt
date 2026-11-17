@@ -4,7 +4,6 @@
 ;; layout this engine will load: config, BPE vocab and merges, safetensors.
 
 (require file/sha1
-         racket/file
          racket/string
          "errors.rkt")
 
@@ -54,7 +53,9 @@
                   (string-join missing ", "))))]))
 
 (define (check-file-sha256 path expected)
-  (define got (bytes->hex-string (sha256-bytes (file->bytes path))))
+  (define got
+    (bytes->hex-string
+     (call-with-input-file path sha256-bytes #:mode 'binary)))
   (unless (string=? (string-downcase got) (string-downcase expected))
     (raise-gpt2
      (format "sha256 mismatch for ~a\nexpected ~a\ngot ~a\n~a"

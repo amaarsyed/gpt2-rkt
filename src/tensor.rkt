@@ -23,8 +23,7 @@
          flvector-dot
          dims->string
          matrix-shape
-         paste-cols!
-         tensor-append-rows)
+         paste-cols!)
 
 (struct tensor (dims data)
   #:constructor-name raw-tensor
@@ -206,25 +205,6 @@
           (loop-j (fx+ j 1))))
       (loop-i (fx+ i 1))))
   (raw-tensor (list rows width) out))
-
-(define (tensor-append-rows a b)
-  (define-values (ra ca) (matrix-shape 'tensor-append-rows a))
-  (define-values (rb cb) (matrix-shape 'tensor-append-rows b))
-  (unless (= ca cb)
-    (raise-arguments-error 'tensor-append-rows
-                           "row widths differ"
-                           "left" (dims->string (tensor-dims a))
-                           "right" (dims->string (tensor-dims b))))
-  (define na (* ra ca))
-  (define nb (* rb cb))
-  (define out (make-flvector (+ na nb)))
-  (define adata (tensor-data a))
-  (define bdata (tensor-data b))
-  (for ([i (in-range na)])
-    (flvector-set! out i (flvector-ref adata i)))
-  (for ([i (in-range nb)])
-    (flvector-set! out (+ na i) (flvector-ref bdata i)))
-  (make-tensor (list (+ ra rb) ca) out))
 
 ;; Inverse of slice-cols: copy src's columns into dest starting at col0.
 (define (paste-cols! dest dest-cols src col0)

@@ -11,6 +11,7 @@
          racket/future
          racket/port
          racket/string
+         "machine.rkt"
          "../src/nn.rkt"
          "../src/tensor.rkt")
 
@@ -117,7 +118,7 @@
     (list (format "racket-version: ~a" (version))
           (format "vm: ~a" (system-type 'vm))
           "workload: flvector-dot"
-          "note: placeholder kernel until model load exists; one token is one dot product"
+          "note: placeholder kernel for the CI smoke; the model benchmark is bench/run.rkt. One token is one dot product"
           "note: peak-bytes is current-memory-use 'peak, the process high-water mark across collections. A later prompt length measured in the same process includes the earlier peak. The harness entry point measures each length in its own process.")
     (apply append
            (for/list ([sample (in-list samples)])
@@ -143,40 +144,8 @@
   (and (= rows (matmul-sample-in sample) (matmul-sample-out sample))
        rows))
 
-(define (cpu-from-proc)
-  (with-handlers ([exn:fail? (lambda (_) #f)])
-    (and (file-exists? "/proc/cpuinfo")
-         (call-with-input-file "/proc/cpuinfo"
-           (lambda (in)
-             (for/or ([line (in-lines in)])
-               (define name
-                 (and (string-prefix? line "model name")
-                      (string-trim (cadr (string-split line ":" #:trim? #f)))))
-               (and name (not (string=? name "")) name)))))))
-
-(define (cpu-from-sysctl)
-  (with-handlers ([exn:fail? (lambda (_) #f)])
-    (define exe (find-executable-path "sysctl"))
-    (and exe
-         (let-values ([(proc out in err)
-                       (subprocess #f #f #f exe "-n" "machdep.cpu.brand_string")])
-           (close-output-port in)
-           (define text (string-trim (port->string out)))
-           (close-input-port out)
-           (close-input-port err)
-           (subprocess-wait proc)
-           (and (zero? (subprocess-status proc))
-                (not (string=? text ""))
-                text)))))
-
 (define (machine-line)
-  (define cpu (or (cpu-from-proc) (cpu-from-sysctl) "unknown"))
-  (format "machine: os=~a arch=~a vm=~a processors=~a cpu=~a"
-          (system-type 'os)
-          (system-type 'arch)
-          (system-type 'vm)
-          (processor-count)
-          cpu))
+  (format-machine-line))
 
 (define (matmul-args rows in out value)
   (values (make-tensor (list rows in) (make-flvector (* rows in) value))

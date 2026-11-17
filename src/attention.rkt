@@ -8,9 +8,10 @@
 ;; position is -inf, then softmax, then the merge and c_proj.
 ;;
 ;; KV cache: k and v may have more rows than q. Query row i sits at
-;; absolute position (rows(k) - rows(q) + i), so it can see a prefix of
-;; cached keys and not a later query in the same chunk. M5 can append
-;; new key and value rows and call attend unchanged.
+;; absolute position (rows(k) - rows(q) + i). #:kv-rows limits that
+;; count when the buffer is longer than the filled prefix. Each head
+;; reads its columns from that prefix in place, with a column offset,
+;; instead of copying the prefix out.
 
 (require racket/flonum
          "nn.rkt"
@@ -18,6 +19,7 @@
 
 (provide qkv-split
          attention-scale
+         apply-causal-mask!
          causal-scores
          attend
          gpt2-attention)
@@ -30,6 +32,21 @@
 (define (qkv-split mixed)
   (define parts (split-last mixed 3))
   (values (car parts) (cadr parts) (caddr parts)))
+
+(define (apply-causal-mask! scores scale)
+  (define nq (car (tensor-dims scores)))
+  (define nk (cadr (tensor-dims scores)))
+  (define src (tensor-data scores))
+  (define pos0 (- nk nq))
+  (for ([i (in-range nq)])
+    (define limit (+ pos0 i))
+    (for ([j (in-range nk)])
+      (define idx (+ (* i nk) j))
+      (flvector-set! src idx
+                     (if (> j limit)
+                         -inf.0
+                         (fl* scale (flvector-ref src idx))))))
+  scores)
 
 (define (causal-scores q k scale)
   (unless (and (flonum? scale) (fl> scale 0.0))
@@ -46,19 +63,7 @@
                            "q is longer than k"
                            "q rows" nq
                            "k rows" nk))
-  (define dots (matmul-transposed-b q k))
-  (define src (tensor-data dots))
-  (define out (make-flvector (* nq nk)))
-  (define pos0 (- nk nq))
-  (for ([i (in-range nq)])
-    (define limit (+ pos0 i))
-    (for ([j (in-range nk)])
-      (define idx (+ (* i nk) j))
-      (flvector-set! out idx
-                     (if (> j limit)
-                         -inf.0
-                         (fl* scale (flvector-ref src idx))))))
-  (make-tensor (list nq nk) out))
+  (apply-causal-mask! (matmul-transposed-b q k) scale))
 
 (define (attend q k v n-head #:kv-rows [kv-rows #f])
   (unless (exact-positive-integer? n-head)
@@ -99,12 +104,10 @@
   (define merged (make-tensor (list nq d) (make-flvector (* nq d) 0.0)))
   (for ([h (in-range n-head)])
     (define start (* h dh))
-    (define end (+ start dh))
-    (define qh (slice-cols q start end))
-    (define kh (slice-cols k start end #:rows used))
-    (define vh (slice-cols v start end #:rows used))
-    (define probs (softmax (causal-scores qh kh scale)))
-    (paste-cols! merged d (matmul probs vh bias) start))
+    (define qh (slice-cols q start (+ start dh)))
+    (define scores (matmul-transposed-block qh k used start))
+    (define probs (softmax (apply-causal-mask! scores scale)))
+    (paste-cols! merged d (matmul-column-block probs v bias start dh) start))
   merged)
 
 (define (gpt2-attention x c-attn-w c-attn-b c-proj-w c-proj-b n-head)
