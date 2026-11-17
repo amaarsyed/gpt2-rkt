@@ -2,7 +2,7 @@
 
 Pure-Racket inference for GPT-2 Small (124M). Numeric work uses `flvector` and `racket/flonum`. On more than one processor, a matrix multiply of at least 100000 flops is split across rows when it has 32 or more rows, and across output columns otherwise. That still covers a single-token logits multiply. A smaller multiply, including the per-head attention products, stays in one thread. Each split uses four times as many blocks as `processor-count`. Model weights are not in git.
 
-This is the 0.1.0 line. `generate` parses a request and checks the model directory. Weight loading is not implemented yet, so a missing directory is a missing-assets error, and a directory that already has the expected files stops with "model loading is not implemented".
+This is the 0.1.0 line. `generate` loads a GPT-2 directory, encodes the prompt, and writes sampled text. A missing file is a missing-assets error. `model.safetensors` is read as little-endian F32. The reader is the one Milestone 6 will extend, so the tiny model uses the same file the CLI already requires.
 
 Tested with Racket CS 9.3. CI installs that version and runs `raco test`. Python is not required.
 
@@ -22,7 +22,7 @@ racket main.rkt --help
 racket main.rkt generate --help
 ```
 
-Generate. This exits non-zero until model assets are installed:
+Generate from a model directory:
 
 ```sh
 racket main.rkt generate \
@@ -31,7 +31,7 @@ racket main.rkt generate \
   --max-new-tokens 16
 ```
 
-Decoding is greedy unless `--temperature` is greater than 0. `--top-k` and `--seed` require sampling. A flag's value is the next argument, even when that text starts with `-`. `-h` and `--help` are help only in flag position. Range checks live on `generate-config`; the parser only decodes arguments.
+Decoding is greedy unless `--temperature` is greater than 0. A temperature of 0 or less is an error. `--top-k` and `--seed` require sampling. A flag's value is the next argument, even when that text starts with `-`. `-h` and `--help` are help only in flag position. Range checks live on `generate-config`; the parser only decodes arguments.
 
 ```sh
 racket main.rkt generate \
@@ -70,6 +70,10 @@ racket bench/harness.rkt
 ## Transformer block
 
 `gpt2-block` is pre-LN. Let `h = x + attn(ln_1(x))`. The block output is `h + mlp(ln_2(h))`. Both norms use biased variance and epsilon `1e-5`. The MLP is `c_fc` from the model width to the inner width, the tanh GELU, and `c_proj` back. For GPT-2 small those matrices are `[768, 3072]` and `[3072, 768]`. `gpt2-blocks` folds a list of blocks. The final norm is the same `layer-norm`.
+
+## Inference
+
+`load-model` reads `config.json`, the tokenizer files, and little-endian F32 `model.safetensors`. `next-token-logits` scores the next id after a prompt. `model-generate` scores the prompt once, then one new token at a time from the per-layer key/value cache. It stops at `eos_token_id` (50256 when the config omits it) or at the requested count. The id list includes that eos token; the printed text does not. A UTF-8 character split across tokens stays buffered until the next token completes it, or until generation finishes. Omit temperature for greedy decoding. A temperature of 0 or less is an error. `top-k` keeps the largest scores before the softmax. A seed uses a private generator. The prompt plus the new tokens must fit in 1024 positions. `position-embed` takes `#:start` so a cached token uses its absolute position.
 
 ## Tokenizer and embeddings
 
