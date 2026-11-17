@@ -87,6 +87,9 @@ and matching greedy token IDs. These results are separate from the VM reference.
 [Phase 8](docs/PHASE8.md) records the speed changes and an alternating comparison
 against the tree before those changes, including timed allocation counts.
 
+[Phase 9](docs/PHASE9.md) removes cached-path Q/K/V intermediates and records the
+head-kernel experiments and worker sweep. Its worker defaults remain unchanged.
+
 `src/tensor.rkt` is a row-major tensor on one `flvector`, with explicit dimensions. `src/nn.rkt` is the GPT-2 arithmetic:
 
 - `matmul` is Hugging Face Conv1D: `y[n, out] = x[n, in] · W[in, out] + b[out]`. The inner loop is i-k-j so each step reads a contiguous weight row. A product of at least 100000 flops with thirty-two or more rows is split across rows. A shorter product of that size is split across columns. Smaller products stay serial. Both splits use one block per processor.
@@ -108,6 +111,10 @@ workspace reuses one score row per head across queries and layers. Large
 prefills give each head a future, with disjoint scratch and output columns.
 GELU and residual additions reuse fresh product buffers; caller inputs and
 returned trace tensors remain independent.
+
+The cached block reads queries from the leading columns of the packed Q/K/V
+projection and writes keys and values directly into the cache. `attend` uses
+`#:query-width` to distinguish that logical width from the stored row stride.
 
 ## Transformer block
 
