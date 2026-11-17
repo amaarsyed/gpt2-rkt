@@ -91,7 +91,6 @@
   "prompt": "Once upon a time",
   "racket_version": "9.3",
   "runs": 3,
-  "seed": 1,
   "vm": "chez-scheme",
   "warmup": 1
 }

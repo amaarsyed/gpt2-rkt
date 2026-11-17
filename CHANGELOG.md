@@ -2,9 +2,8 @@
 
 ## 0.1.0
 
-Pure-Racket GPT-2 Small inference on Racket CS. No tag is cut with this
-tree. The owner merges the stack and runs the benchmark on the target
-machine first.
+Pure-Racket GPT-2 Small inference on Racket CS. Published numbers for a
+machine come from `sh bench/run.sh` on that machine.
 
 ### Added
 
@@ -15,7 +14,7 @@ machine first.
 
 ### Fixed
 
-- Load memory is read after a collection, so the weight-file buffer is not part of the resident figure.
+- The benchmark reads resident memory after a collection, so the weight-file buffer is not part of that figure. `load-model` itself does not collect.
 - Attention reads each head from the key and value cache in place.
 - `next-token-logits` allocates a cache for the prompt, not the whole position table.
 - A cache handle cannot be advanced twice.
