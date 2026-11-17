@@ -13,6 +13,7 @@
 (require racket/fixnum
          racket/flonum
          racket/future
+         racket/performance-hint
          racket/unsafe/ops
          "tensor.rkt")
 
@@ -238,7 +239,7 @@
       (fill-matmul! y xdata wdata bdata in width i0 i1 j0 j1 w-cols col)))
   (make-tensor (list n width) y))
 
-(define (dot-row h hbase W wbase in)
+(define-inline (dot-row h hbase W wbase in)
   (let loop-k ([k 0] [sum 0.0])
     (if (unsafe-fx= k in)
         sum
