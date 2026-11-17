@@ -40,6 +40,8 @@
       (raise-gpt2 "top-k must be an integer >= 1"))
     (unless (or (not seed) (exact-nonnegative-integer? seed))
       (raise-gpt2 "seed must be an integer >= 0"))
+    (when (and seed (>= seed (expt 2 31)))
+      (raise-gpt2 "seed must be an integer from 0 through 2147483647"))
     (define sampling? (and temp (> temp 0.0)))
     (when (and top-k (not sampling?))
       (raise-gpt2 "top-k requires temperature > 0"))
