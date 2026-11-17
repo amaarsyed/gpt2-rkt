@@ -119,14 +119,16 @@
 (define (gpt2-block x params)
   (block-trace-out (gpt2-block-parts x params)))
 
-(define (write-rows! dest row src)
-  (define cols (cadr (tensor-dims dest)))
-  (define n (car (tensor-dims src)))
-  (define from (tensor-data src))
-  (define to (tensor-data dest))
-  (define base (* row cols))
-  (for ([i (in-range (* n cols))])
-    (flvector-set! to (+ base i) (flvector-ref from i))))
+(define (write-qkv! k v row mixed width)
+  (define from (tensor-data mixed))
+  (define kd (tensor-data k))
+  (define vd (tensor-data v))
+  (for ([i (in-range (car (tensor-dims mixed)))])
+    (define src (+ (* i 3 width) width))
+    (define dest (* (+ row i) width))
+    (for ([j (in-range width)])
+      (flvector-set! kd (+ dest j) (flvector-ref from (+ src j)))
+      (flvector-set! vd (+ dest j) (flvector-ref from (+ src width j))))))
 
 ;; past-k and past-v are preallocated buffers. The new rows are written
 ;; at #:filled, and attend sees only the filled prefix.
@@ -146,21 +148,21 @@
   (define mixed (matmul ln1
                         (block-params-c-attn-w params)
                         (block-params-c-attn-b params)))
-  (define-values (q k v) (qkv-split mixed))
-  (define nq (car (tensor-dims k)))
-  (define cap (car (tensor-dims past-k)))
-  (unless (and (= cap (car (tensor-dims past-v)))
-               (<= (+ filled nq) cap))
+  (define-values (nq mixed-width) (matrix-shape 'gpt2-block-cached mixed))
+  (define-values (cap width) (matrix-shape 'gpt2-block-cached past-k))
+  (unless (and (= mixed-width (* 3 width)) (equal? (tensor-dims past-k) (tensor-dims past-v)))
+    (raise-arguments-error 'gpt2-block-cached "cache shapes do not match the projected key/value width"
+                           "mixed" (tensor-dims mixed) "k" (tensor-dims past-k) "v" (tensor-dims past-v)))
+  (unless (<= (+ filled nq) cap)
     (raise-arguments-error 'gpt2-block-cached
                            "the cache is shorter than the next rows"
                            "filled" filled
                            "new" nq
                            "capacity" cap))
-  (write-rows! past-k filled k)
-  (write-rows! past-v filled v)
+  (write-qkv! past-k past-v filled mixed width)
   (define kv-rows (+ filled nq))
-  (define heads (attend q past-k past-v (block-params-n-head params)
-                        #:kv-rows kv-rows #:workspace workspace))
+  (define heads (attend mixed past-k past-v (block-params-n-head params)
+                        #:kv-rows kv-rows #:workspace workspace #:query-width width))
   (define residual1 (matmul-add heads
                                 (block-params-attn-proj-w params)
                                 (block-params-attn-proj-b params)

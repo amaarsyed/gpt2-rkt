@@ -3,6 +3,7 @@
 (module+ test
   (require rackunit
            racket/flonum
+           racket/list
            "../src/nn.rkt"
            "../src/tensor.rkt")
 
@@ -95,6 +96,31 @@
         (for/fold ([acc 0.0]) ([k (in-range in)])
           (fl+ acc (fl* (flvector-ref h (+ (* i in) k))
                         (flvector-ref W (+ (* j in) k))))))))
+
+  (test-case "transposed products handle empty, short, and unrolled row tails"
+    (for ([inner (in-list '(0 1 3 4 7 64 768))])
+      (define h (make-flvector (* 3 inner)))
+      (define W (make-flvector (* 5 inner)))
+      (for ([i (in-range (flvector-length h))])
+        (flvector-set! h i (/ (real->double-flonum (- (remainder i 11) 5)) 7.0)))
+      (for ([i (in-range (flvector-length W))])
+        (flvector-set! W i (/ (real->double-flonum (- (remainder i 13) 6)) 9.0)))
+      (check-close (matmul-transposed-b (make-tensor (list 3 inner) h) (make-tensor (list 5 inner) W))
+                   (apply append (naive-transposed 3 inner 5 h W)) 1e-12)))
+
+  (test-case "worker budgets preserve decode and prefill products"
+    (for ([shape (in-list '((1 128 1024) (33 64 64)))])
+      (define n (car shape))
+      (define inner (cadr shape))
+      (define out (caddr shape))
+      (define x (make-tensor (list n inner) (make-flvector (* n inner) 1.0)))
+      (define W (make-tensor (list inner out) (make-flvector (* inner out) 1.0)))
+      (define b (make-tensor (list out) (make-flvector out 0.0)))
+      (for ([workers (in-list '(1 2 999))])
+        (parameterize ([current-decode-workers workers] [current-prefill-workers workers])
+          (check-equal? (elements (matmul x W b)) (make-list (* n out) (real->double-flonum inner))))))
+    (check-exn exn:fail:contract? (lambda () (current-decode-workers 0)))
+    (check-exn exn:fail:contract? (lambda () (current-prefill-workers 1.5))))
 
   (test-case "a prime output width matches a naive loop"
     ;; 1031 is prime, so a column split wider than 4 still has a ×4 tail.
