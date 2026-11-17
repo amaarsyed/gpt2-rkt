@@ -4,7 +4,8 @@ param(
     [int]$Rounds = 3,
     [string]$Phase = 'phase8',
     [string]$BaselineRef = '1ad7035',
-    [string]$BaselineSource = 'models/phase8-baseline'
+    [string]$BaselineSource = 'models/phase8-baseline',
+    [switch]$Smoke
 )
 
 # Alternate the trees. Each sample is a fresh process with one warmup.
@@ -22,19 +23,23 @@ $baselineSha = (git -C $root rev-parse $BaselineRef).Trim()
 $runtime = (& $Racket --version) -join ' '
 $jobs = @(@('load', 0), @('prefill', 16), @('prefill', 128), @('prefill', 512),
           @('prefill', 1000), @('decode', 128), @('sample', 128), @('head', 1), @('square', 768))
+if ($Smoke) { $jobs = @(@('prefill', 16), @('decode', 4), @('head', 1)) }
+$modelDir = if ($Smoke) { 'tests/tiny-gpt2' } else { 'models/gpt2' }
 $rows = [Collections.Generic.List[object]]::new()
 
 foreach ($job in $jobs) {
     for ($round = 1; $round -le $Rounds; $round++) {
         $order = if ($round % 2) { @('baseline', $Phase) } else { @($Phase, 'baseline') }
-        foreach ($phase in $order) {
-            $source = if ($phase -eq 'baseline') { $baseline } else { $root }
-            Write-Host "$phase $($job[0]) $($job[1]), round $round"
-            $text = & $Racket (Join-Path $root 'bench/compare-phases.rkt') --source $source `
-                --model-dir (Join-Path $root 'models/gpt2') --child $job[0] --size $job[1] --runs 1
+        foreach ($tree in $order) {
+            $source = if ($tree -eq 'baseline') { $baseline } else { $root }
+            Write-Host "$tree $($job[0]) $($job[1]), round $round"
+            $childArgs = @((Join-Path $root 'bench/compare-phases.rkt'), '--source', $source,
+                '--model-dir', (Join-Path $root $modelDir), '--child', $job[0], '--size', $job[1], '--runs', 1)
+            if ($Smoke) { $childArgs += '--smoke' }
+            $text = & $Racket @childArgs
             if ($LASTEXITCODE -ne 0) { throw 'Benchmark child failed' }
             $data = ($text -join "`n") | ConvertFrom-Json
-            $row = [pscustomobject]@{ phase = $phase; kind = $job[0]; size = $job[1]; round = $round; data = $data }
+            $row = [pscustomobject]@{ phase = $tree; kind = $job[0]; size = $job[1]; round = $round; data = $data }
             $rows.Add($row)
             $row | ConvertTo-Json -Depth 10 -Compress | Add-Content -LiteralPath $raw -Encoding utf8
             Write-Host ('{0:N3} ms' -f $data.median_ms)
@@ -64,14 +69,15 @@ $summary = foreach ($job in $jobs) {
     }
 }
 $report = [pscustomobject]@{
-    phase = $Phase; baseline_sha = $baselineSha; candidate_sha = $sha; racket = $runtime
+    phase = $Phase; smoke = [bool]$Smoke; baseline_sha = $baselineSha; candidate_sha = $sha; racket = $runtime
     date = '2026-11-17'; cpu = 'AMD Ryzen 5 8645HS'; os = 'windows'; processors = [Environment]::ProcessorCount
     rounds = $Rounds; warmup = 1; results = @($summary)
 }
 $report | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $dest 'summary.json') -Encoding utf8
 $lines = @("# $Phase speed comparison", '', "Candidate: ``$sha``. Baseline: ``$BaselineRef``.", '',
     "Alternating trees, one warmup per child, median of $Rounds fresh-process samples.",
-    'Generation includes prompt prefill. Allocated bytes count only the timed call.',
+    $(if ($Smoke) { 'Tiny-model smoke check, not a speed measurement.' }
+      else { 'Generation includes prompt prefill. Allocated bytes count only the timed call.' }),
     'Process peaks include loading and are not OS working-set measurements.', '',
     "| Configuration | Baseline ms | $Phase ms | Speedup |", '| --- | ---: | ---: | ---: |')
 foreach ($row in $summary) {
