@@ -318,8 +318,12 @@
       (substring name (string-length "transformer."))
       name))
 
-(define (ignored-mask? name)
-  (regexp-match? #rx"(?:^|\\.)attn\\.bias$" (canonical-weight-name name)))
+;; attn.bias is the causal mask, stored and ignored. Older exports also
+;; carry attn.masked_bias, a one-element buffer, which is ignored too.
+(define (ignored-buffer? name)
+  (define key (canonical-weight-name name))
+  (or (regexp-match? #rx"(?:^|\\.)attn\\.bias$" key)
+      (regexp-match? #rx"(?:^|\\.)attn\\.masked_bias$" key)))
 
 (define (expected-weight-names n-layer)
   (append '("wte.weight" "wpe.weight" "ln_f.weight" "ln_f.bias")
@@ -374,7 +378,7 @@
     (define tok (load-tokenizer (build-path model-dir "vocab.json")
                                 (build-path model-dir "merges.txt")))
     (define raw (read-safetensors (build-path model-dir "model.safetensors")
-                                  #:skip ignored-mask?))
+                                  #:skip ignored-buffer?))
     (define weights
       (for/fold ([table (hash)]) ([(name tensor) (in-hash raw)])
         (define key (canonical-weight-name name))
@@ -382,6 +386,14 @@
           (raise-gpt2 (format "duplicate tensor: ~a" key)))
         (hash-set table key tensor)))
     (define names (expected-weight-names n-layer))
+    (define lm-head (hash-ref weights "lm_head.weight" #f))
+    (when lm-head
+      (define wte (hash-ref weights "wte.weight" #f))
+      (unless (and wte
+                   (equal? (tensor-dims lm-head) (tensor-dims wte))
+                   (equal? (tensor-data lm-head) (tensor-data wte)))
+        (raise-gpt2 "lm_head.weight is not tied to wte.weight"))
+      (set! weights (hash-remove weights "lm_head.weight")))
     (define missing
       (filter (lambda (name) (not (hash-ref weights name #f))) names))
     (unless (null? missing)

@@ -2,7 +2,7 @@
 
 Pure-Racket inference for GPT-2 Small (124M). Numeric work uses `flvector` and `racket/flonum`. On more than one processor, a matrix multiply of at least 100000 flops is split across rows when it has 32 or more rows, and across output columns otherwise. That still covers a single-token logits multiply. A smaller multiply, including the per-head attention products, stays in one thread. Each split uses four times as many blocks as `processor-count`. Model weights are not in git.
 
-This is the 0.1.0 line. `generate` loads a GPT-2 directory, encodes the prompt, and writes each decoded token as it is chosen. A missing or corrupt file names the asset and `sh tools/fetch-gpt2-vocab.sh`. `model.safetensors` is little-endian F32, read in place from the header offsets. Names may be bare (`wte.weight`) or prefixed with `transformer.`. The `attn.bias` mask buffers are ignored. The tiny model uses the same reader.
+This is the 0.1.0 line. `generate` loads a GPT-2 directory, encodes the prompt, and writes each decoded token as it is chosen. A missing file names the asset and `sh tools/fetch-gpt2-vocab.sh`. The fetch script and the digest check reject a corrupt file; `load-model` checks shapes and keys, not the digest. `model.safetensors` is little-endian F32, read in place from the header offsets. Names may be bare (`wte.weight`) or prefixed with `transformer.`. The `attn.bias` and `attn.masked_bias` buffers are ignored. A `lm_head.weight` that matches `wte` is accepted and unused. The tiny model uses the same reader.
 
 Tested with Racket CS 9.3. CI installs that version and runs `raco test`. Python is not required.
 

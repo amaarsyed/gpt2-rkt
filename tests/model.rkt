@@ -375,6 +375,27 @@
                   (lambda () (load-model dir3))))
      (lambda () (delete-directory/files dir3))))
 
+  (test-case "masked_bias is skipped and a tied lm_head is accepted"
+    (define tied
+      (append base-specs
+              '(("h.0.attn.masked_bias" 1)
+                ("lm_head.weight" 2 2))))
+    (define dir (tiny-dir tied base-config))
+    (dynamic-wind
+     void
+     (lambda ()
+       (define model (load-model dir))
+       (check-equal? (flvector-length (next-token-logits model '(0))) 2))
+     (lambda () (delete-directory/files dir)))
+    (define untied (append base-specs '(("lm_head.weight" 2 3))))
+    (define dir2 (tiny-dir untied base-config))
+    (dynamic-wind
+     void
+     (lambda ()
+       (check-exn #rx"lm_head.weight is not tied to wte.weight"
+                  (lambda () (load-model dir2))))
+     (lambda () (delete-directory/files dir2))))
+
   (test-case "a sha256 mismatch names the file and the fetch command"
     (define path (make-temporary-file "gpt2-rkt-~a"))
     (dynamic-wind
