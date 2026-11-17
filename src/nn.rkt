@@ -247,26 +247,6 @@
                             (unsafe-fl* (unsafe-flvector-ref h (unsafe-fx+ hbase k))
                                         (unsafe-flvector-ref W (unsafe-fx+ wbase k))))))))
 
-;; Four adjacent output rows share the input load and loop control.
-(define (dot-four! y dest h hbase W wbase stride in)
-  (define w1 (unsafe-fx+ wbase stride))
-  (define w2 (unsafe-fx+ w1 stride))
-  (define w3 (unsafe-fx+ w2 stride))
-  (let loop-k ([k 0] [a 0.0] [b 0.0] [c 0.0] [d 0.0])
-    (cond
-      [(unsafe-fx= k in)
-       (unsafe-flvector-set! y dest a)
-       (unsafe-flvector-set! y (unsafe-fx+ dest 1) b)
-       (unsafe-flvector-set! y (unsafe-fx+ dest 2) c)
-       (unsafe-flvector-set! y (unsafe-fx+ dest 3) d)]
-      [else
-       (define v (unsafe-flvector-ref h (unsafe-fx+ hbase k)))
-       (loop-k (unsafe-fx+ k 1)
-               (unsafe-fl+ a (unsafe-fl* v (unsafe-flvector-ref W (unsafe-fx+ wbase k))))
-               (unsafe-fl+ b (unsafe-fl* v (unsafe-flvector-ref W (unsafe-fx+ w1 k))))
-               (unsafe-fl+ c (unsafe-fl* v (unsafe-flvector-ref W (unsafe-fx+ w2 k))))
-               (unsafe-fl+ d (unsafe-fl* v (unsafe-flvector-ref W (unsafe-fx+ w3 k)))))])))
-
 ;; y[i, j] = sum_k h[i, k] * W[j, col0 + k].
 ;; W rows are row-stride apart. A contiguous W has row-stride = in and col0 = 0.
 (define (fill-transposed! y h W in out row-stride col0 i0 i1 j0 j1)
@@ -278,8 +258,14 @@
         (define j4 (unsafe-fx+ j 4))
         (cond
           [(unsafe-fx<= j4 j1)
-           (dot-four! y (unsafe-fx+ ybase j) h hbase W
-                       (unsafe-fx+ col0 (unsafe-fx* j row-stride)) row-stride in)
+           (unsafe-flvector-set! y (unsafe-fx+ ybase j)
+                                 (dot-row h hbase W (unsafe-fx+ col0 (unsafe-fx* j row-stride)) in))
+           (unsafe-flvector-set! y (unsafe-fx+ ybase (unsafe-fx+ j 1))
+                                 (dot-row h hbase W (unsafe-fx+ col0 (unsafe-fx* (unsafe-fx+ j 1) row-stride)) in))
+           (unsafe-flvector-set! y (unsafe-fx+ ybase (unsafe-fx+ j 2))
+                                 (dot-row h hbase W (unsafe-fx+ col0 (unsafe-fx* (unsafe-fx+ j 2) row-stride)) in))
+           (unsafe-flvector-set! y (unsafe-fx+ ybase (unsafe-fx+ j 3))
+                                 (dot-row h hbase W (unsafe-fx+ col0 (unsafe-fx* (unsafe-fx+ j 3) row-stride)) in))
            (loop-j j4)]
           [(unsafe-fx< j j1)
            (unsafe-flvector-set! y (unsafe-fx+ ybase j)
