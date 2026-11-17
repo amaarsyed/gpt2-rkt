@@ -36,7 +36,6 @@
          matmul-sample-rows
          matmul-sample-in
          matmul-sample-out
-         matmul-sample-dim
          run-matmul-benchmark
          format-matmul-report
          default-matmul-dim
@@ -231,8 +230,14 @@
    "\n"
    #:after-last "\n"))
 
+(define (running-racket)
+  (define exec (find-system-path 'exec-file))
+  (if (complete-path? exec)
+      exec
+      (find-executable-path exec)))
+
 (define (run-prompt-process n)
-  (define racket (find-executable-path "racket"))
+  (define racket (running-racket))
   (define script
     (path->string (simplify-path (path->complete-path (find-system-path 'run-file)))))
   (define-values (proc out in err)
