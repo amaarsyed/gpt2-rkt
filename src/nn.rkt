@@ -3,12 +3,15 @@
 ;; GPT-2 numeric kernels. Storage is row-major flvectors.
 ;; matmul is HF Conv1D: y[n, out] = x[n, in] · W[in, out] + b[out].
 ;; The inner loops are i-k-j so each step reads a contiguous W row.
+;; Wide problems are split across rows. A short problem, including a
+;; single-token logits multiply, is split across output columns.
 ;; matmul-transposed-b is h[n, in] · Wᵀ with W stored as [out, in]
 ;; (tied wte). Its k loop dots two contiguous rows.
 
 (require racket/fixnum
          racket/flonum
          racket/future
+         racket/unsafe/ops
          "tensor.rkt")
 
 (provide matmul
@@ -20,8 +23,12 @@
 
 (define layernorm-eps 1e-5)
 
-;; Below this row count the future setup costs more than the arithmetic.
-(define parallel-row-threshold 32)
+;; Below this length the future setup costs more than the arithmetic.
+;; A problem with fewer rows than this, and at least this many columns,
+;; is split across columns so a single-token matmul still runs in parallel.
+(define parallel-axis-threshold 32)
+;; More blocks than cores, so a slow core does not set the wall time.
+(define parallel-block-multiple 4)
 
 ;; tanh(x) = (e^{2x}-1)/(e^{2x}+1), saturated where the flonum result is ±1.
 (define (fltanh x)
@@ -52,42 +59,84 @@
                            "dims" (dims->string dims)))
   (values (car dims) (cadr dims) (tensor-data t)))
 
-(define (for-row-blocks rows proc)
+(define (for-parallel-blocks total proc)
   (define cpus (processor-count))
   (cond
-    [(or (fx< rows parallel-row-threshold) (fx< cpus 2))
-     (proc 0 rows)]
+    [(or (fx< cpus 2) (fx< total parallel-axis-threshold))
+     (proc 0 total)]
     [else
-     (define futures
-       (for/list ([cpu (in-range cpus)])
-         (define start (quotient (fx* cpu rows) cpus))
-         (define end (quotient (fx* (fx+ cpu 1) rows) cpus))
-         (future (lambda () (proc start end)))))
-     (for-each touch futures)]))
+     (define blocks (fx* parallel-block-multiple cpus))
+     (define jobs
+       (for/list ([b (in-range blocks)])
+         (define start (quotient (fx* b total) blocks))
+         (define end (quotient (fx* (fx+ b 1) total) blocks))
+         (and (fx< start end)
+              (future (lambda () (proc start end))))))
+     (for ([job (in-list jobs)] #:when job)
+       (touch job))]))
 
-;; y[i, j] = b[j] + sum_k x[i, k] * W[k, j]
-(define (fill-matmul-rows! y x W b in out start end)
-  (let loop-i ([i start])
-    (unless (fx= i end)
-      (define ybase (fx* i out))
-      (define xbase (fx* i in))
-      (let loop-j ([j 0])
-        (unless (fx= j out)
-          (flvector-set! y (fx+ ybase j) (flvector-ref b j))
-          (loop-j (fx+ j 1))))
+;; y[i, j] = b[j] + sum_k x[i, k] * W[k, j], for i in [i0, i1) and j in [j0, j1).
+(define (fill-matmul! y x W b in out i0 i1 j0 j1)
+  (let loop-i ([i i0])
+    (unless (unsafe-fx= i i1)
+      (define ybase (unsafe-fx* i out))
+      (define xbase (unsafe-fx* i in))
+      (let loop-j ([j j0])
+        (define j4 (unsafe-fx+ j 4))
+        (cond
+          [(unsafe-fx<= j4 j1)
+           (unsafe-flvector-set! y (unsafe-fx+ ybase j) (unsafe-flvector-ref b j))
+           (unsafe-flvector-set! y (unsafe-fx+ ybase (unsafe-fx+ j 1))
+                                 (unsafe-flvector-ref b (unsafe-fx+ j 1)))
+           (unsafe-flvector-set! y (unsafe-fx+ ybase (unsafe-fx+ j 2))
+                                 (unsafe-flvector-ref b (unsafe-fx+ j 2)))
+           (unsafe-flvector-set! y (unsafe-fx+ ybase (unsafe-fx+ j 3))
+                                 (unsafe-flvector-ref b (unsafe-fx+ j 3)))
+           (loop-j j4)]
+          [(unsafe-fx< j j1)
+           (unsafe-flvector-set! y (unsafe-fx+ ybase j) (unsafe-flvector-ref b j))
+           (loop-j (unsafe-fx+ j 1))]))
       (let loop-k ([k 0])
-        (unless (fx= k in)
-          (define xik (flvector-ref x (fx+ xbase k)))
-          (define wbase (fx* k out))
-          (let loop-j ([j 0])
-            (unless (fx= j out)
-              (define yj (fx+ ybase j))
-              (flvector-set! y yj
-                             (fl+ (flvector-ref y yj)
-                                  (fl* xik (flvector-ref W (fx+ wbase j)))))
-              (loop-j (fx+ j 1))))
-          (loop-k (fx+ k 1))))
-      (loop-i (fx+ i 1)))))
+        (unless (unsafe-fx= k in)
+          (define xik (unsafe-flvector-ref x (unsafe-fx+ xbase k)))
+          (define wbase (unsafe-fx* k out))
+          (let loop-j ([j j0])
+            (define j4 (unsafe-fx+ j 4))
+            (cond
+              [(unsafe-fx<= j4 j1)
+               (define y0 (unsafe-fx+ ybase j))
+               (define y1 (unsafe-fx+ y0 1))
+               (define y2 (unsafe-fx+ y0 2))
+               (define y3 (unsafe-fx+ y0 3))
+               (unsafe-flvector-set!
+                y y0
+                (unsafe-fl+ (unsafe-flvector-ref y y0)
+                            (unsafe-fl* xik (unsafe-flvector-ref W (unsafe-fx+ wbase j)))))
+               (unsafe-flvector-set!
+                y y1
+                (unsafe-fl+ (unsafe-flvector-ref y y1)
+                            (unsafe-fl* xik
+                                        (unsafe-flvector-ref W (unsafe-fx+ wbase (unsafe-fx+ j 1))))))
+               (unsafe-flvector-set!
+                y y2
+                (unsafe-fl+ (unsafe-flvector-ref y y2)
+                            (unsafe-fl* xik
+                                        (unsafe-flvector-ref W (unsafe-fx+ wbase (unsafe-fx+ j 2))))))
+               (unsafe-flvector-set!
+                y y3
+                (unsafe-fl+ (unsafe-flvector-ref y y3)
+                            (unsafe-fl* xik
+                                        (unsafe-flvector-ref W (unsafe-fx+ wbase (unsafe-fx+ j 3))))))
+               (loop-j j4)]
+              [(unsafe-fx< j j1)
+               (define yj (unsafe-fx+ ybase j))
+               (unsafe-flvector-set!
+                y yj
+                (unsafe-fl+ (unsafe-flvector-ref y yj)
+                            (unsafe-fl* xik (unsafe-flvector-ref W (unsafe-fx+ wbase j)))))
+               (loop-j (unsafe-fx+ j 1))]))
+          (loop-k (unsafe-fx+ k 1))))
+      (loop-i (unsafe-fx+ i 1)))))
 
 (define (matmul x W b)
   (define-values (n in xdata) (require-matrix 'matmul x))
@@ -107,31 +156,51 @@
                            "W" (dims->string (tensor-dims W))))
   (define y (make-flvector (fx* n out)))
   (define bdata (tensor-data b))
-  (for-row-blocks n
-    (lambda (start end)
-      (fill-matmul-rows! y xdata wdata bdata in out start end)))
+  (cond
+    [(fx>= n parallel-axis-threshold)
+     (for-parallel-blocks n
+       (lambda (i0 i1)
+         (fill-matmul! y xdata wdata bdata in out i0 i1 0 out)))]
+    [else
+     (for-parallel-blocks out
+       (lambda (j0 j1)
+         (fill-matmul! y xdata wdata bdata in out 0 n j0 j1)))])
   (make-tensor (list n out) y))
 
 ;; y[i, j] = sum_k h[i, k] * W[j, k], W stored [out, in].
-(define (fill-transposed-rows! y h W in out start end)
-  (let loop-i ([i start])
-    (unless (fx= i end)
-      (define ybase (fx* i out))
-      (define hbase (fx* i in))
-      (let loop-j ([j 0])
-        (unless (fx= j out)
-          (define wbase (fx* j in))
-          (define acc
-            (let loop-k ([k 0] [sum 0.0])
-              (if (fx= k in)
-                  sum
-                  (loop-k (fx+ k 1)
-                          (fl+ sum
-                               (fl* (flvector-ref h (fx+ hbase k))
-                                    (flvector-ref W (fx+ wbase k))))))))
-          (flvector-set! y (fx+ ybase j) acc)
-          (loop-j (fx+ j 1))))
-      (loop-i (fx+ i 1)))))
+;; i is in [i0, i1) and j is in [j0, j1).
+(define (dot-row h hbase W wbase in)
+  (let loop-k ([k 0] [sum 0.0])
+    (if (unsafe-fx= k in)
+        sum
+        (loop-k (unsafe-fx+ k 1)
+                (unsafe-fl+ sum
+                            (unsafe-fl* (unsafe-flvector-ref h (unsafe-fx+ hbase k))
+                                        (unsafe-flvector-ref W (unsafe-fx+ wbase k))))))))
+
+(define (fill-transposed! y h W in out i0 i1 j0 j1)
+  (let loop-i ([i i0])
+    (unless (unsafe-fx= i i1)
+      (define ybase (unsafe-fx* i out))
+      (define hbase (unsafe-fx* i in))
+      (let loop-j ([j j0])
+        (define j4 (unsafe-fx+ j 4))
+        (cond
+          [(unsafe-fx<= j4 j1)
+           (unsafe-flvector-set! y (unsafe-fx+ ybase j)
+                                 (dot-row h hbase W (unsafe-fx* j in) in))
+           (unsafe-flvector-set! y (unsafe-fx+ ybase (unsafe-fx+ j 1))
+                                 (dot-row h hbase W (unsafe-fx* (unsafe-fx+ j 1) in) in))
+           (unsafe-flvector-set! y (unsafe-fx+ ybase (unsafe-fx+ j 2))
+                                 (dot-row h hbase W (unsafe-fx* (unsafe-fx+ j 2) in) in))
+           (unsafe-flvector-set! y (unsafe-fx+ ybase (unsafe-fx+ j 3))
+                                 (dot-row h hbase W (unsafe-fx* (unsafe-fx+ j 3) in) in))
+           (loop-j j4)]
+          [(unsafe-fx< j j1)
+           (unsafe-flvector-set! y (unsafe-fx+ ybase j)
+                                 (dot-row h hbase W (unsafe-fx* j in) in))
+           (loop-j (unsafe-fx+ j 1))]))
+      (loop-i (unsafe-fx+ i 1)))))
 
 (define (matmul-transposed-b h W)
   (define-values (n in hdata) (require-matrix 'matmul-transposed-b h))
@@ -142,29 +211,22 @@
                            "h" (dims->string (tensor-dims h))
                            "W" (dims->string (tensor-dims W))))
   (define y (make-flvector (fx* n out)))
-  (for-row-blocks n
-    (lambda (start end)
-      (fill-transposed-rows! y hdata wdata in out start end)))
+  (cond
+    [(fx>= n parallel-axis-threshold)
+     (for-parallel-blocks n
+       (lambda (i0 i1)
+         (fill-transposed! y hdata wdata in out i0 i1 0 out)))]
+    [else
+     (for-parallel-blocks out
+       (lambda (j0 j1)
+         (fill-transposed! y hdata wdata in out 0 n j0 j1)))])
   (make-tensor (list n out) y))
-
-(define (row-groups dims)
-  (define width
-    (let loop ([dims dims])
-      (if (null? (cdr dims))
-          (car dims)
-          (loop (cdr dims)))))
-  (define total
-    (let loop ([dims dims] [n 1])
-      (if (null? dims)
-          n
-          (loop (cdr dims) (* n (car dims))))))
-  (values width (if (zero? width) 0 (quotient total width))))
 
 (define (softmax t)
   (unless (tensor? t)
     (raise-argument-error 'softmax "tensor?" t))
   (define dims (tensor-dims t))
-  (define-values (width rows) (row-groups dims))
+  (define-values (width rows) (tensor-row-groups dims))
   (when (fx= width 0)
     (raise-arguments-error 'softmax
                            "last dimension must be positive"
@@ -228,7 +290,7 @@
   (unless (and (flonum? eps) (fl> eps 0.0))
     (raise-argument-error 'layer-norm "positive flonum?" eps))
   (define dims (tensor-dims x))
-  (define-values (width rows) (row-groups dims))
+  (define-values (width rows) (tensor-row-groups dims))
   (when (fx= width 0)
     (raise-arguments-error 'layer-norm
                            "last dimension must be positive"
