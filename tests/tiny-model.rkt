@@ -57,7 +57,8 @@
       (define got (last-row-nums logits))
       (define full (flvector->list (next-token-logits model context)))
       (check-equal? got full)
-      (check-true (within-tolerance? got expected))
+      ;; The acceptance bar stays 1e-3 + 1e-4*|e|. Measured max abs here is 3.41e-5.
+      (check-true (within-tolerance? got expected #:abs 5e-5 #:rel 0.0))
       (check-equal? (hash-ref step 'next) (argmax-id got))
       (set! previous context))
     (check-equal? (generation-token-ids
