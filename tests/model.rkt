@@ -103,6 +103,27 @@
     (check-equal? incremental full)
     (check-false (equal? (car full) (cadr full))))
 
+  (test-case "a kv cache is sized to the call and cannot be advanced twice"
+    (define model
+      (make-gpt2 #:wte (numbered 5 4)
+                 #:wpe (numbered 8 4)
+                 #:blocks (list (block 4 2 1))
+                 #:ln-gain (filled '(4) 1.0)
+                 #:ln-bias (filled '(4) 0.0)
+                 #:eos-id 0))
+    (define short (empty-kv-cache model #:capacity 1))
+    (check-exn #rx"shorter than the next rows"
+               (lambda () (model-forward model '(1 3) short)))
+    (check-exn #rx"n_positions"
+               (lambda () (empty-kv-cache model #:capacity 9)))
+    (define cache (empty-kv-cache model #:capacity 4))
+    (define-values (first returned) (model-forward model '(1) cache))
+    (check-exn #rx"already advanced"
+               (lambda () (model-forward model '(3) cache)))
+    (define-values (second _again) (model-forward model '(3) returned))
+    (check-equal? (elements (tensor-data second))
+                  (elements (next-token-logits model '(1 3)))))
+
   (test-case "generation stops on token 50256"
     (define vocab 50257)
     (define data (make-flvector (* vocab 2) 0.0))

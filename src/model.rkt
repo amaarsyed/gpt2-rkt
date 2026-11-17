@@ -56,11 +56,14 @@
   #:constructor-name raw-gpt2
   #:transparent)
 
-(struct kv-cache (layers position) #:transparent)
+;; live is a box of this handle's position. model-forward clears it, so
+;; the same handle cannot be advanced twice: the buffers are mutated in
+;; place and a second call would overwrite the rows just written.
+(struct kv-cache (layers position live) #:transparent)
 
-;; One preallocated key/value buffer per layer. filled is the number of
-;; rows written. The next step updates these buffers in place.
-(struct layer-cache (k v filled) #:transparent)
+;; One preallocated key/value buffer per layer. The shared position on
+;; kv-cache is how many rows have been written.
+(struct layer-cache (k v) #:transparent)
 
 (struct generation (token-ids text) #:transparent)
 
@@ -82,15 +85,19 @@
             eos-id
             wte wpe blocks ln-gain ln-bias tokenizer))
 
-(define (empty-kv-cache model)
-  (define n (gpt2-model-n-positions model))
+(define (empty-kv-cache model #:capacity [capacity #f])
+  (define npos (gpt2-model-n-positions model))
+  (define n (or capacity npos))
+  (unless (and (exact-positive-integer? n) (<= n npos))
+    (raise-gpt2
+     (format "kv cache capacity must be from 1 through n_positions (~a)" npos)))
   (define d (gpt2-model-n-embd model))
   (kv-cache
    (for/list ([_ (in-list (gpt2-model-blocks model))])
      (layer-cache (make-tensor (list n d) (make-flvector (* n d) 0.0))
-                  (make-tensor (list n d) (make-flvector (* n d) 0.0))
-                  0))
-   0))
+                  (make-tensor (list n d) (make-flvector (* n d) 0.0))))
+   0
+   (box 0)))
 
 (define (context-limit model)
   (min gpt2-context-length (gpt2-model-n-positions model)))
@@ -115,34 +122,34 @@
   (when (null? ids)
     (raise-gpt2 "model-activations needs at least one token"))
   (check-context 'model-activations (length ids) (context-limit model))
-  (define embed (input-embed (gpt2-model-wte model)
-                             (gpt2-model-wpe model)
-                             ids))
-  (define-values (final blocks)
-    (for/fold ([hidden embed] [outs '()])
-              ([params (in-list (gpt2-model-blocks model))])
-      (define out (gpt2-block hidden params))
-      (values out (cons out outs))))
-  (define hidden (layer-norm final
-                             (gpt2-model-ln-gain model)
-                             (gpt2-model-ln-bias model)))
-  (define last (tensor-row hidden (sub1 (car (tensor-dims hidden)))))
-  (activation-trace embed (reverse blocks) hidden (tied-logits last (gpt2-model-wte model))))
+  (define trace (box #f))
+  (define-values (_logits _cache)
+    (model-forward model ids
+                   (empty-kv-cache model #:capacity (length ids))
+                   #:last-only #t
+                   #:trace trace))
+  (unbox trace))
 
-(define (model-forward model ids cache #:last-only [last-only #f])
+(define (model-forward model ids cache #:last-only [last-only #f] #:trace [trace #f])
   (unless (gpt2-model? model)
     (raise-argument-error 'model-forward "gpt2-model?" model))
   (unless (and (list? ids) (andmap exact-nonnegative-integer? ids))
     (raise-argument-error 'model-forward "list of token ids?" ids))
+  (unless (kv-cache? cache)
+    (raise-argument-error 'model-forward "kv-cache?" cache))
   (define start (kv-cache-position cache))
+  (define live (kv-cache-live cache))
+  (unless (and (box? live) (equal? (unbox live) start))
+    (raise-gpt2 "kv cache was already advanced and cannot be reused"))
   (define n (length ids))
   (check-context 'model-forward (+ start n) (context-limit model))
-  (define x (input-embed (gpt2-model-wte model)
-                         (gpt2-model-wpe model)
-                         ids
-                         #:start start))
-  (define-values (y layers)
-    (for/fold ([hidden x] [acc '()])
+  (set-box! live #f)
+  (define embed (input-embed (gpt2-model-wte model)
+                             (gpt2-model-wpe model)
+                             ids
+                             #:start start))
+  (define-values (y layers outs)
+    (for/fold ([hidden embed] [acc '()] [outs '()])
               ([params (in-list (gpt2-model-blocks model))]
                [past (in-list (kv-cache-layers cache))])
       (define-values (out k v)
@@ -150,15 +157,27 @@
                            params
                            (layer-cache-k past)
                            (layer-cache-v past)
-                           #:filled (layer-cache-filled past)))
-      (values out (cons (layer-cache k v (+ (layer-cache-filled past) n)) acc))))
+                           #:filled start))
+      (values out
+              (cons (layer-cache k v) acc)
+              (if trace (cons out outs) outs))))
   (define hidden (layer-norm y (gpt2-model-ln-gain model) (gpt2-model-ln-bias model)))
   (define scored
     (if last-only
         (tensor-row hidden (sub1 (car (tensor-dims hidden))))
         hidden))
-  (values (tied-logits scored (gpt2-model-wte model))
-          (kv-cache (reverse layers) (+ start n))))
+  (define logits (tied-logits scored (gpt2-model-wte model)))
+  (define returned (kv-cache (reverse layers) (+ start n) (box (+ start n))))
+  (when trace
+    (set-box! trace
+              (activation-trace embed
+                                (reverse outs)
+                                hidden
+                                (if last-only
+                                    logits
+                                    (tied-logits (tensor-row hidden (sub1 (car (tensor-dims hidden))))
+                                                 (gpt2-model-wte model))))))
+  (values logits returned))
 
 (define (last-row logits)
   (define dims (tensor-dims logits))
@@ -174,8 +193,11 @@
 (define (next-token-logits model ids)
   (when (null? ids)
     (raise-gpt2 "next-token-logits needs at least one token"))
+  (check-context 'next-token-logits (length ids) (context-limit model))
   (define-values (logits _cache)
-    (model-forward model ids (empty-kv-cache model) #:last-only #t))
+    (model-forward model ids
+                   (empty-kv-cache model #:capacity (length ids))
+                   #:last-only #t))
   (last-row logits))
 
 (define (argmax logits)
