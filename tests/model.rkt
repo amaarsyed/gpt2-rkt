@@ -1,8 +1,11 @@
 #lang racket/base
 
 (module+ test
-  (require racket/flonum
+  (require json
+           racket/file
+           racket/flonum
            racket/list
+           racket/string
            rackunit
            "../src/block.rkt"
            "../src/errors.rkt"
@@ -99,6 +102,21 @@
     (check-equal? incremental full)
     (check-false (equal? (car full) (cadr full))))
 
+  (test-case "generation stops on token 50256"
+    (define vocab 50257)
+    (define data (make-flvector (* vocab 2) 0.0))
+    (flvector-set! data (* 50256 2) 1.0)
+    (define model
+      (make-gpt2 #:wte (make-tensor (list vocab 2) data)
+                 #:wpe (filled '(4 2) 0.0)
+                 #:blocks (list (zero-block 2))
+                 #:ln-gain (filled '(2) 0.0)
+                 #:ln-bias (make-tensor '(2) (flvector 1.0 0.0))
+                 #:eos-id 50256))
+    (define result (model-generate model '(0) 4))
+    (check-equal? (generation-token-ids result) '(50256))
+    (check-equal? (generation-text result) ""))
+
   (test-case "generation stops at the eos token"
     (define wte (make-tensor '(4 2) (flvector 0.0 1.0
                                               0.0 1.0
@@ -156,4 +174,72 @@
     (check-exn #rx"vocabulary"
                (lambda ()
                  (model-generate model '(0) 1 #:temperature 0.5 #:top-k 5 #:seed 1))))
+
+  (define (json-ints nums)
+    (string-append "[" (string-join (map number->string nums) ",") "]"))
+
+  (define (write-zero-safetensors path specs)
+    (define entries '())
+    (define blobs '())
+    (define offset 0)
+    (for ([spec (in-list specs)])
+      (define dims (cdr spec))
+      (define nbytes (* 4 (apply * dims)))
+      (set! entries
+            (cons (format "~s:{\"dtype\":\"F32\",\"shape\":~a,\"data_offsets\":~a}"
+                          (car spec)
+                          (json-ints dims)
+                          (json-ints (list offset (+ offset nbytes))))
+                  entries))
+      (set! blobs (cons (make-bytes nbytes 0) blobs))
+      (set! offset (+ offset nbytes)))
+    (define payload
+      (string->bytes/utf-8
+       (string-append "{" (string-join (reverse entries) ",") "}")))
+    (define padded
+      (bytes-append payload (make-bytes (modulo (- 8 (modulo (bytes-length payload) 8)) 8) 32)))
+    (call-with-output-file path
+      (lambda (out)
+        (write-bytes (integer->integer-bytes (bytes-length padded) 8 #f #f) out)
+        (write-bytes padded out)
+        (for ([blob (in-list (reverse blobs))])
+          (write-bytes blob out)))
+      #:exists 'truncate))
+
+  (test-case "a config without eos_token_id stops on 50256"
+    (define dir (make-temporary-file "gpt2-rkt-~a" 'directory))
+    (dynamic-wind
+     void
+     (lambda ()
+       (call-with-output-file (build-path dir "config.json")
+         (lambda (out)
+           (write-json (hash 'n_layer 1 'n_embd 2 'n_head 1 'vocab_size 2) out))
+         #:exists 'truncate)
+       (call-with-output-file (build-path dir "vocab.json")
+         (lambda (out) (write-json (hash 'a 0 'b 1) out))
+         #:exists 'truncate)
+       (call-with-output-file (build-path dir "merges.txt")
+         (lambda (out) (displayln "#version: 0.2" out))
+         #:exists 'truncate)
+       (write-zero-safetensors
+        (build-path dir "model.safetensors")
+        `(("transformer.wte.weight" 2 2)
+          ("transformer.wpe.weight" 4 2)
+          ("transformer.ln_f.weight" 2)
+          ("transformer.ln_f.bias" 2)
+          ("transformer.h.0.ln_1.weight" 2)
+          ("transformer.h.0.ln_1.bias" 2)
+          ("transformer.h.0.attn.c_attn.weight" 2 6)
+          ("transformer.h.0.attn.c_attn.bias" 6)
+          ("transformer.h.0.attn.c_proj.weight" 2 2)
+          ("transformer.h.0.attn.c_proj.bias" 2)
+          ("transformer.h.0.ln_2.weight" 2)
+          ("transformer.h.0.ln_2.bias" 2)
+          ("transformer.h.0.mlp.c_fc.weight" 2 8)
+          ("transformer.h.0.mlp.c_fc.bias" 8)
+          ("transformer.h.0.mlp.c_proj.weight" 8 2)
+          ("transformer.h.0.mlp.c_proj.bias" 2)))
+       (define model (load-model dir))
+       (check-equal? (gpt2-model-eos-id model) 50256))
+     (lambda () (delete-directory/files dir))))
   )
