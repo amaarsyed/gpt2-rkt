@@ -412,7 +412,9 @@
 (define (load-model model-dir)
   (define started (current-inexact-milliseconds))
   (define model (load-model-file model-dir))
-  (current-load-report
-   (load-report (/ (- (current-inexact-milliseconds) started) 1000.0)
-                (current-memory-use)))
+  (define seconds (/ (- (current-inexact-milliseconds) started) 1000.0))
+  ;; The file bytes are dead after the tensors exist. Collect before
+  ;; reading, or the report still includes that buffer.
+  (collect-garbage)
+  (current-load-report (load-report seconds (current-memory-use)))
   model)
