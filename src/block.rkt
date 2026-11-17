@@ -1,6 +1,6 @@
 #lang racket/base
 
-;; One pre-LN GPT-2 block: x + attn(ln_1(x)), then that plus mlp(ln_2(x)).
+;; One pre-LN GPT-2 block: h = x + attn(ln_1(x)); out = h + mlp(ln_2(h)).
 ;; The MLP is c_fc [width, inner], tanh GELU, c_proj [inner, width].
 
 (require "attention.rkt"
