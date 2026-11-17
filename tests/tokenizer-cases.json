@@ -1,0 +1,290 @@
+{
+  "reference": "tiktoken gpt2",
+  "revision": "607a30d783dfa663caf39e06633721c8d4cfcd7e",
+  "cases": [
+    {
+      "name": "empty",
+      "text": "",
+      "ids": []
+    },
+    {
+      "name": "hello",
+      "text": "hello",
+      "ids": [
+        31373
+      ]
+    },
+    {
+      "name": "hello-leading-space",
+      "text": " Hello",
+      "ids": [
+        18435
+      ]
+    },
+    {
+      "name": "hello-trailing-space",
+      "text": "hello ",
+      "ids": [
+        31373,
+        220
+      ]
+    },
+    {
+      "name": "repeated-spaces",
+      "text": "hello  world",
+      "ids": [
+        31373,
+        220,
+        995
+      ]
+    },
+    {
+      "name": "leading-repeated-space",
+      "text": "  a",
+      "ids": [
+        220,
+        257
+      ]
+    },
+    {
+      "name": "trailing-repeated-spaces",
+      "text": "a  b  ",
+      "ids": [
+        64,
+        220,
+        275,
+        220,
+        220
+      ]
+    },
+    {
+      "name": "two-spaces",
+      "text": "  ",
+      "ids": [
+        220,
+        220
+      ]
+    },
+    {
+      "name": "newline",
+      "text": "\n",
+      "ids": [
+        198
+      ]
+    },
+    {
+      "name": "double-newline",
+      "text": "\n\n",
+      "ids": [
+        628
+      ]
+    },
+    {
+      "name": "tab",
+      "text": "\t",
+      "ids": [
+        197
+      ]
+    },
+    {
+      "name": "crlf",
+      "text": "\r\n",
+      "ids": [
+        201,
+        198
+      ]
+    },
+    {
+      "name": "nbsp",
+      "text": " ",
+      "ids": [
+        1849
+      ]
+    },
+    {
+      "name": "nbsp-word",
+      "text": " hello",
+      "ids": [
+        1849,
+        31373
+      ]
+    },
+    {
+      "name": "newline-nbsp",
+      "text": "\n ",
+      "ids": [
+        44320
+      ]
+    },
+    {
+      "name": "ideographic-space",
+      "text": "　",
+      "ids": [
+        5099,
+        222
+      ]
+    },
+    {
+      "name": "ideographic-word",
+      "text": "　hello",
+      "ids": [
+        5099,
+        222,
+        31373
+      ]
+    },
+    {
+      "name": "accented",
+      "text": "café",
+      "ids": [
+        66,
+        1878,
+        2634
+      ]
+    },
+    {
+      "name": "cjk",
+      "text": "你好",
+      "ids": [
+        19526,
+        254,
+        25001,
+        121
+      ]
+    },
+    {
+      "name": "emoji-wave",
+      "text": "👋",
+      "ids": [
+        41840,
+        233
+      ]
+    },
+    {
+      "name": "emoji-smile",
+      "text": "🙂",
+      "ids": [
+        8582,
+        25081
+      ]
+    },
+    {
+      "name": "contraction-lower",
+      "text": "I'm",
+      "ids": [
+        40,
+        1101
+      ]
+    },
+    {
+      "name": "contraction-upper",
+      "text": "I'M",
+      "ids": [
+        40,
+        6,
+        44
+      ]
+    },
+    {
+      "name": "contraction-dont",
+      "text": "don't",
+      "ids": [
+        9099,
+        470
+      ]
+    },
+    {
+      "name": "contraction-dont-upper",
+      "text": "DON'T",
+      "ids": [
+        41173,
+        6,
+        51
+      ]
+    },
+    {
+      "name": "apostrophe-s",
+      "text": "'s",
+      "ids": [
+        338
+      ]
+    },
+    {
+      "name": "apostrophe-s-upper",
+      "text": "'S",
+      "ids": [
+        6,
+        50
+      ]
+    },
+    {
+      "name": "digits",
+      "text": "12345",
+      "ids": [
+        10163,
+        2231
+      ]
+    },
+    {
+      "name": "punctuation",
+      "text": "...",
+      "ids": [
+        986
+      ]
+    },
+    {
+      "name": "hyphenated",
+      "text": "GPT-2",
+      "ids": [
+        38,
+        11571,
+        12,
+        17
+      ]
+    },
+    {
+      "name": "sentence",
+      "text": "The quick brown fox",
+      "ids": [
+        464,
+        2068,
+        7586,
+        21831
+      ]
+    },
+    {
+      "name": "endoftext",
+      "text": "<|endoftext|>",
+      "ids": [
+        50256
+      ]
+    },
+    {
+      "name": "endoftext-between",
+      "text": "a<|endoftext|>b",
+      "ids": [
+        64,
+        50256,
+        65
+      ]
+    },
+    {
+      "name": "endoftext-padded",
+      "text": " <|endoftext|> ",
+      "ids": [
+        220,
+        50256,
+        220
+      ]
+    },
+    {
+      "name": "not-the-special-token",
+      "text": "endoftext",
+      "ids": [
+        437,
+        1659,
+        5239
+      ]
+    }
+  ]
+}
