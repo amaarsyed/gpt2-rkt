@@ -63,21 +63,22 @@
     (define n (apply * dims))
     (make-tensor dims (make-flvector n value)))
 
-  (define (params n-head ln1-gain ln1-bias c-attn-w c-attn-b attn-proj-w attn-proj-b
-                  ln2-gain ln2-bias c-fc-w c-fc-b mlp-proj-w mlp-proj-b)
-    (make-block-params n-head ln1-gain ln1-bias c-attn-w c-attn-b attn-proj-w attn-proj-b
-                       ln2-gain ln2-bias c-fc-w c-fc-b mlp-proj-w mlp-proj-b))
-
   (define (zero-block d n-head ln1-gain ln1-bias ln2-gain ln2-bias
                       c-attn-w attn-proj-w c-fc-w mlp-proj-w)
     (define inner (* 4 d))
-    (params n-head
-            ln1-gain ln1-bias
-            c-attn-w (filled (list (* 3 d)) 0.0)
-            attn-proj-w (filled (list d) 0.0)
-            ln2-gain ln2-bias
-            c-fc-w (filled (list inner) 0.0)
-            mlp-proj-w (filled (list d) 0.0)))
+    (make-block-params #:n-head n-head
+                       #:ln1-gain ln1-gain
+                       #:ln1-bias ln1-bias
+                       #:c-attn-w c-attn-w
+                       #:c-attn-b (filled (list (* 3 d)) 0.0)
+                       #:attn-proj-w attn-proj-w
+                       #:attn-proj-b (filled (list d) 0.0)
+                       #:ln2-gain ln2-gain
+                       #:ln2-bias ln2-bias
+                       #:c-fc-w c-fc-w
+                       #:c-fc-b (filled (list inner) 0.0)
+                       #:mlp-proj-w mlp-proj-w
+                       #:mlp-proj-b (filled (list d) 0.0)))
 
   (test-case "the block normalizes with biased variance and eps 1e-5 before attention"
     (check-equal? layernorm-eps 1e-5)
@@ -134,8 +135,19 @@
     (define mlp-w (make-tensor '(16 4)
                                (flvector-by 64 (lambda (i) (real->double-flonum (/ (remainder i 3) 25.0))))))
     (define mlp-b (filled '(4) 0.0))
-    (define live (params 2 gain bias attn-w attn-b attn-proj-w attn-proj-b
-                         gain bias fc-w fc-b mlp-w mlp-b))
+    (define live (make-block-params #:n-head 2
+                                     #:ln1-gain gain
+                                     #:ln1-bias bias
+                                     #:c-attn-w attn-w
+                                     #:c-attn-b attn-b
+                                     #:attn-proj-w attn-proj-w
+                                     #:attn-proj-b attn-proj-b
+                                     #:ln2-gain gain
+                                     #:ln2-bias bias
+                                     #:c-fc-w fc-w
+                                     #:c-fc-b fc-b
+                                     #:mlp-proj-w mlp-w
+                                     #:mlp-proj-b mlp-b))
     (define ln1 (layer-norm x gain bias))
     (define attn (gpt2-attention ln1 attn-w attn-b attn-proj-w attn-proj-b 2))
     (define res1 (tensor-add x attn))
@@ -152,25 +164,58 @@
     (check-equal? (elements (block-trace-out trace)) (elements expected))
     (check-equal? (elements (gpt2-block x live)) (elements expected)))
 
+  (test-case "block tensors are keyed by the Hugging Face names"
+    (define tensors
+      (hash "ln_1.weight" (filled '(2) 1.0)
+            "ln_1.bias" (filled '(2) 0.2)
+            "attn.c_attn.weight" (filled '(2 6) 0.3)
+            "attn.c_attn.bias" (filled '(6) 0.4)
+            "attn.c_proj.weight" (filled '(2 2) 0.5)
+            "attn.c_proj.bias" (filled '(2) 0.6)
+            "ln_2.weight" (filled '(2) 0.7)
+            "ln_2.bias" (filled '(2) 0.8)
+            "mlp.c_fc.weight" (filled '(2 8) 0.9)
+            "mlp.c_fc.bias" (filled '(8) 1.0)
+            "mlp.c_proj.weight" (filled '(8 2) 1.1)
+            "mlp.c_proj.bias" (filled '(2) 1.2)))
+    (define got (block-params-from-tensors #:n-head 2 tensors))
+    (define expected
+      (make-block-params #:n-head 2
+                         #:ln1-gain (hash-ref tensors "ln_1.weight")
+                         #:ln1-bias (hash-ref tensors "ln_1.bias")
+                         #:c-attn-w (hash-ref tensors "attn.c_attn.weight")
+                         #:c-attn-b (hash-ref tensors "attn.c_attn.bias")
+                         #:attn-proj-w (hash-ref tensors "attn.c_proj.weight")
+                         #:attn-proj-b (hash-ref tensors "attn.c_proj.bias")
+                         #:ln2-gain (hash-ref tensors "ln_2.weight")
+                         #:ln2-bias (hash-ref tensors "ln_2.bias")
+                         #:c-fc-w (hash-ref tensors "mlp.c_fc.weight")
+                         #:c-fc-b (hash-ref tensors "mlp.c_fc.bias")
+                         #:mlp-proj-w (hash-ref tensors "mlp.c_proj.weight")
+                         #:mlp-proj-b (hash-ref tensors "mlp.c_proj.bias")))
+    (check-equal? got expected)
+    (check-exn #rx"missing tensor"
+               (lambda () (block-params-from-tensors #:n-head 1 (hash)))))
+
   (test-case "two blocks then ln_f match the folded pre-LN stack"
     (define x (make-tensor '(2 2) (flvector 0.5 -1.0
                                             1.5 0.25)))
     (define (one salt)
       (define d 2)
       (define inner 8)
-      (params 1
-              (filled '(2) 1.0)
-              (make-tensor '(2) (flvector 0.1 -0.1))
-              (flvector-tensor '(2 6) salt)
-              (filled '(6) 0.0)
-              (flvector-tensor '(2 2) (+ salt 1))
-              (filled '(2) 0.0)
-              (filled '(2) 1.0)
-              (make-tensor '(2) (flvector -0.05 0.05))
-              (flvector-tensor '(2 8) (+ salt 2))
-              (filled '(8) 0.0)
-              (flvector-tensor '(8 2) (+ salt 3))
-              (filled '(2) 0.0)))
+      (make-block-params #:n-head 1
+                         #:ln1-gain (filled '(2) 1.0)
+                         #:ln1-bias (make-tensor '(2) (flvector 0.1 -0.1))
+                         #:c-attn-w (flvector-tensor '(2 6) salt)
+                         #:c-attn-b (filled '(6) 0.0)
+                         #:attn-proj-w (flvector-tensor '(2 2) (+ salt 1))
+                         #:attn-proj-b (filled '(2) 0.0)
+                         #:ln2-gain (filled '(2) 1.0)
+                         #:ln2-bias (make-tensor '(2) (flvector -0.05 0.05))
+                         #:c-fc-w (flvector-tensor '(2 8) (+ salt 2))
+                         #:c-fc-b (filled '(8) 0.0)
+                         #:mlp-proj-w (flvector-tensor '(8 2) (+ salt 3))
+                         #:mlp-proj-b (filled '(2) 0.0)))
     (define b1 (one 1))
     (define b2 (one 4))
     (define mid (gpt2-block (gpt2-block x b1) b2))
@@ -210,19 +255,19 @@
   (define-runtime-path fixture-path "block-cases.json")
 
   (define (params-from block d inner n-head)
-    (params n-head
-            (tensor-from (hash-ref block 'ln1-gain) (list d))
-            (tensor-from (hash-ref block 'ln1-bias) (list d))
-            (tensor-from (hash-ref block 'c-attn-weight) (list d (* 3 d)))
-            (tensor-from (hash-ref block 'c-attn-bias) (list (* 3 d)))
-            (tensor-from (hash-ref block 'attn-proj-weight) (list d d))
-            (tensor-from (hash-ref block 'attn-proj-bias) (list d))
-            (tensor-from (hash-ref block 'ln2-gain) (list d))
-            (tensor-from (hash-ref block 'ln2-bias) (list d))
-            (tensor-from (hash-ref block 'c-fc-weight) (list d inner))
-            (tensor-from (hash-ref block 'c-fc-bias) (list inner))
-            (tensor-from (hash-ref block 'mlp-proj-weight) (list inner d))
-            (tensor-from (hash-ref block 'mlp-proj-bias) (list d))))
+    (make-block-params #:n-head n-head
+                       #:ln1-gain (tensor-from (hash-ref block 'ln1-gain) (list d))
+                       #:ln1-bias (tensor-from (hash-ref block 'ln1-bias) (list d))
+                       #:c-attn-w (tensor-from (hash-ref block 'c-attn-weight) (list d (* 3 d)))
+                       #:c-attn-b (tensor-from (hash-ref block 'c-attn-bias) (list (* 3 d)))
+                       #:attn-proj-w (tensor-from (hash-ref block 'attn-proj-weight) (list d d))
+                       #:attn-proj-b (tensor-from (hash-ref block 'attn-proj-bias) (list d))
+                       #:ln2-gain (tensor-from (hash-ref block 'ln2-gain) (list d))
+                       #:ln2-bias (tensor-from (hash-ref block 'ln2-bias) (list d))
+                       #:c-fc-w (tensor-from (hash-ref block 'c-fc-weight) (list d inner))
+                       #:c-fc-b (tensor-from (hash-ref block 'c-fc-bias) (list inner))
+                       #:mlp-proj-w (tensor-from (hash-ref block 'mlp-proj-weight) (list inner d))
+                       #:mlp-proj-b (tensor-from (hash-ref block 'mlp-proj-bias) (list d))))
 
   (test-case "two eager blocks and ln_f match within tolerance"
     (define fixture (call-with-input-file fixture-path read-json))

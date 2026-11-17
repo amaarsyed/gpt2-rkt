@@ -10,6 +10,7 @@
 (provide gpt2-mlp
          gpt2-mlp-hidden
          make-block-params
+         block-params-from-tensors
          block-params?
          block-params-n-head
          block-trace?
@@ -31,8 +32,55 @@
                       ln2-gain ln2-bias
                       c-fc-w c-fc-b
                       mlp-proj-w mlp-proj-b)
-  #:constructor-name make-block-params
+  #:constructor-name raw-block-params
   #:transparent)
+
+;; Keywords, not positions: a gain/bias swap has the same shape.
+;; block-params-from-tensors uses the Hugging Face suffixes so a loader
+;; can pass one layer's tensors without reordering fields.
+(define (make-block-params #:n-head n-head
+                           #:ln1-gain ln1-gain
+                           #:ln1-bias ln1-bias
+                           #:c-attn-w c-attn-w
+                           #:c-attn-b c-attn-b
+                           #:attn-proj-w attn-proj-w
+                           #:attn-proj-b attn-proj-b
+                           #:ln2-gain ln2-gain
+                           #:ln2-bias ln2-bias
+                           #:c-fc-w c-fc-w
+                           #:c-fc-b c-fc-b
+                           #:mlp-proj-w mlp-proj-w
+                           #:mlp-proj-b mlp-proj-b)
+  (raw-block-params n-head
+                    ln1-gain ln1-bias
+                    c-attn-w c-attn-b
+                    attn-proj-w attn-proj-b
+                    ln2-gain ln2-bias
+                    c-fc-w c-fc-b
+                    mlp-proj-w mlp-proj-b))
+
+(define (block-params-from-tensors #:n-head n-head tensors)
+  (unless (hash? tensors)
+    (raise-argument-error 'block-params-from-tensors "hash?" tensors))
+  (define (get name)
+    (hash-ref tensors name
+              (lambda ()
+                (raise-arguments-error 'block-params-from-tensors
+                                       "missing tensor"
+                                       "name" name))))
+  (make-block-params #:n-head n-head
+                     #:ln1-gain (get "ln_1.weight")
+                     #:ln1-bias (get "ln_1.bias")
+                     #:c-attn-w (get "attn.c_attn.weight")
+                     #:c-attn-b (get "attn.c_attn.bias")
+                     #:attn-proj-w (get "attn.c_proj.weight")
+                     #:attn-proj-b (get "attn.c_proj.bias")
+                     #:ln2-gain (get "ln_2.weight")
+                     #:ln2-bias (get "ln_2.bias")
+                     #:c-fc-w (get "mlp.c_fc.weight")
+                     #:c-fc-b (get "mlp.c_fc.bias")
+                     #:mlp-proj-w (get "mlp.c_proj.weight")
+                     #:mlp-proj-b (get "mlp.c_proj.bias")))
 
 (struct block-trace (ln1 attn residual1 ln2 mlp-hidden out)
   #:transparent)
