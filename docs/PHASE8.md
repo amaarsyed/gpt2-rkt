@@ -34,6 +34,11 @@ The raw [samples](../bench/results/phase8-windows-2026-11-17/samples.jsonl),
 [summary](../bench/results/phase8-windows-2026-11-17/summary.json), and
 [comparison](../bench/results/phase8-windows-2026-11-17/comparison.md) are committed.
 
+The final local `raco test .` run passed 122 tests, including the four real
+GPT-2 checks. New regressions cover dense/causal attention agreement, scratch
+ownership, interleaved requests with mixed head counts, and top-k tie ordering.
+Production sources are identical to the benchmarked `e8af302` revision.
+
 ## Changes
 
 - Matrix products use one future block per processor instead of four.
