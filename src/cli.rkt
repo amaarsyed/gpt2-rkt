@@ -3,6 +3,7 @@
 ;; Argument parsing for `racket main.rkt`.
 
 (require racket/string
+         "errors.rkt"
          "generate.rkt")
 
 (provide top-help-text
@@ -16,17 +17,17 @@
 ;; One row per flag. Help text and parsing both read this table.
 (define option-table
   (list
-   (opt 'model-dir "DIR" 'nonempty-string #t
+   (opt 'model-dir "DIR" 'string #t
         "Directory of model assets")
-   (opt 'prompt "TEXT" 'nonempty-string #t
+   (opt 'prompt "TEXT" 'string #t
         "Prompt text")
-   (opt 'max-new-tokens "N" 'positive-int #t
+   (opt 'max-new-tokens "N" 'number #t
         "Number of tokens to generate (integer >= 1)")
-   (opt 'temperature "T" 'temperature #f
+   (opt 'temperature "T" 'number #f
         "Sampling temperature (number >= 0). Omit or 0 for greedy decoding")
-   (opt 'top-k "K" 'positive-int #f
+   (opt 'top-k "K" 'number #f
         "Keep the K most likely tokens (integer >= 1). Requires temperature > 0")
-   (opt 'seed "S" 'nonnegative-int #f
+   (opt 'seed "S" 'number #f
         "RNG seed (integer >= 0). Requires temperature > 0")))
 
 (define opts-by-name
@@ -63,6 +64,7 @@
    "\n"
    "Generate tokens from a prompt.\n"
    "Decoding is greedy unless --temperature is greater than 0.\n"
+   "A flag value is the following argument, including text that starts with '-'.\n"
    "\n"
    "Required:\n"
    (format-opt-block (filter opt-required? option-table))
@@ -83,46 +85,28 @@
   (or (help-flag? arg)
       (equal? arg "help")))
 
-(define (parse-positive-int raw flag)
-  (define n (string->number raw))
-  (unless (exact-positive-integer? n)
-    (raise-gpt2 (format "invalid --~a: ~a\nexpected an integer >= 1" flag raw)))
-  n)
-
-(define (parse-nonnegative-int raw flag)
-  (define n (string->number raw))
-  (unless (exact-nonnegative-integer? n)
-    (raise-gpt2 (format "invalid --~a: ~a\nexpected an integer >= 0" flag raw)))
-  n)
-
-(define (parse-temperature raw flag)
-  (define n (string->number raw))
-  (unless (and (real? n) (rational? n) (>= n 0))
-    (raise-gpt2 (format "invalid --~a: ~a\nexpected a number >= 0" flag raw)))
-  n)
-
+;; Kinds are only 'string or 'number. Numeric ranges live on generate-config.
 (define (parse-kind kind raw flag)
   (case kind
-    [(nonempty-string)
-     (when (string=? raw "")
-       (raise-gpt2 (format "--~a must be non-empty" flag)))
-     raw]
-    [(positive-int) (parse-positive-int raw flag)]
-    [(nonnegative-int) (parse-nonnegative-int raw flag)]
-    [(temperature) (parse-temperature raw flag)]
+    [(string) raw]
+    [(number)
+     (define n (string->number raw))
+     (unless (real? n)
+       (raise-gpt2 (format "invalid --~a: ~a" flag raw)))
+     n]
     [else (error 'parse-kind "unknown kind: ~a" kind)]))
 
 ;; Returns 'help, or a generate-config. Raises exn:fail:gpt2 on bad arguments.
+;; `-h` and `--help` count only when they appear as flags, not as values.
 (define (parse-generate-args args)
-  (cond
-    [(ormap help-flag? args) 'help]
-    [else (parse-options args)]))
+  (parse-options args))
 
 (define (parse-options args)
   (define seen (make-hasheq))
   (let loop ([args args])
     (cond
       [(null? args) (build-config seen)]
+      [(help-flag? (car args)) 'help]
       [else
        (define-values (name raw rest) (take-option args))
        (define spec (hash-ref opts-by-name name #f))
@@ -142,8 +126,7 @@
     [(regexp-match #px"^--([A-Za-z0-9-]+)$" arg)
      => (lambda (m)
           (define name (cadr m))
-          (when (or (null? (cdr args))
-                    (regexp-match? #px"^--" (cadr args)))
+          (when (null? (cdr args))
             (raise-gpt2 (format "missing value for --~a" name)))
           (values name (cadr args) (cddr args)))]
     [else
