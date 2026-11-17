@@ -114,6 +114,9 @@
                                "--temperature" "0.8" "--seed" "-1")
                  #px"seed must be an integer >= 0")
     (check-usage '("generate" "--model-dir" "m" "--prompt" "hi" "--max-new-tokens" "1"
+                               "--temperature" "0.8" "--seed" "3000000000")
+                 #px"seed must be an integer from 0 through 2147483647")
+    (check-usage '("generate" "--model-dir" "m" "--prompt" "hi" "--max-new-tokens" "1"
                                "--top-k" "40")
                  #px"top-k requires temperature > 0")
     (check-usage '("generate" "--model-dir" "m" "--prompt" "hi" "--max-new-tokens" "1"
@@ -154,6 +157,13 @@
     (check-equal? (generate-config-temperature cfg) 0.8)
     (check-equal? (generate-config-top-k cfg) 40)
     (check-equal? (generate-config-seed cfg) 1)
+    (define biggest
+      (parse-generate-args '("--model-dir" "models/gpt2"
+                             "--prompt" "hi"
+                             "--max-new-tokens" "1"
+                             "--temperature" "0.8"
+                             "--seed" "2147483647")))
+    (check-equal? (generate-config-seed biggest) 2147483647)
     (check-exn exn:fail:gpt2?
                (lambda ()
                  (parse-generate-args '("--model-dir" "models/gpt2"
@@ -222,6 +232,12 @@
                       #px"config.json"))
        (check-false (regexp-match? #px"missing model assets" (outcome-err result))))
      (lambda () (delete-directory/files dir))))
+
+  (test-case "a short position table rejects a long generation"
+    (check-usage '("generate" "--model-dir" "tiny-gpt2"
+                   "--prompt" "hi" "--max-new-tokens" "40")
+                 #px"limit 32")
+    (void))
 
   (test-case "run-cli rejects a non-string argument"
     (check-exn exn:fail:contract?

@@ -28,7 +28,7 @@
    (opt 'top-k "K" 'number #f
         "Keep the K most likely tokens (integer >= 1). Requires temperature > 0")
    (opt 'seed "S" 'number #f
-        "RNG seed (integer >= 0). Requires temperature > 0")))
+        "RNG seed (integer from 0 through 2147483647). Requires temperature > 0")))
 
 (define opts-by-name
   (for/hash ([o (in-list option-table)])
