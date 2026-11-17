@@ -1,8 +1,8 @@
 #lang racket/base
 
 ;; Token and position embedding lookup. wte is [vocab, d] and wpe is
-;; [positions, d], both row-major. GPT-2 positions are 0 .. n-1 and n
-;; cannot pass 1024.
+;; [positions, d], both row-major. Positions are start .. start+n-1.
+;; start + n cannot pass 1024.
 
 (require racket/flonum
          "tensor.rkt")
@@ -48,25 +48,30 @@
     (copy-row! out i data id width))
   (make-tensor (list n width) out))
 
-(define (position-embed wpe n)
+(define (position-embed wpe n #:start [start 0])
   (unless (exact-nonnegative-integer? n)
     (raise-argument-error 'position-embed "exact-nonnegative-integer?" n))
-  (when (> n gpt2-context-length)
+  (unless (exact-nonnegative-integer? start)
+    (raise-argument-error 'position-embed "exact-nonnegative-integer?" start))
+  (define end (+ start n))
+  (when (> end gpt2-context-length)
     (raise-arguments-error 'position-embed
                            "sequence is longer than the context"
+                           "start" start
                            "length" n
                            "context" gpt2-context-length))
   (define-values (rows width data) (table-parts 'position-embed wpe))
-  (when (> n rows)
+  (when (> end rows)
     (raise-arguments-error 'position-embed
                            "sequence is longer than the position table"
+                           "start" start
                            "length" n
                            "rows" rows))
   (define out (make-flvector (* n width)))
   (for ([i (in-range n)])
-    (copy-row! out i data i width))
+    (copy-row! out i data (+ start i) width))
   (make-tensor (list n width) out))
 
-(define (input-embed wte wpe ids)
+(define (input-embed wte wpe ids #:start [start 0])
   (tensor-add (token-embed wte ids)
-              (position-embed wpe (length ids))))
+              (position-embed wpe (length ids) #:start start)))
