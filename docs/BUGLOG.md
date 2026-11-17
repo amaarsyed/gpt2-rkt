@@ -13,6 +13,7 @@ Defects found while building gpt2-rkt. Add one row per bug.
 | The source guard would have failed on the pre-tokenizer comment | The comment named the reference language | Describe the whitespace class without that name | `3199901` | CI grep over `*.rkt` files |
 | The BPE fetch script fails on a machine without `sha256sum` | The script always invoked `sha256sum`, which macOS does not ship | Use `sha256sum` when it exists, otherwise `shasum -a 256`. Digests come from `tools/gpt2-assets.sha256` | `15421c3` | `sh tools/fetch-gpt2-vocab.sh` |
 | The tokenizer fixture test spawns `sha256sum` | The digest check shelled out with `system*` | Hash the files with `sha256-bytes` and `bytes->hex-string`, reading the same digest file | `3077ca4` | `tests/tokenizer-cases.rkt`: "pinned BPE files match the published digests" |
+| A blank line in `tools/gpt2-assets.sha256` makes the digest test error | `read-asset-digests` required every line to hold a digest and a name | Skip blank lines, as the fixture loader does | `7415d6e` | `tests/tokenizer-cases.rkt`: "digest lines may be blank" |
 
 ## Anticipated risks verified
 
@@ -26,4 +27,4 @@ Risks called out before implementation. The code already matched the intended be
 | Contractions are case-sensitive (`'m` merges, `'M` does not) | Lowercase patterns only | `tests/pretokenize.rkt`: "contractions are case-sensitive" |
 | ASCII-only `\s` splits a newline followed by NBSP | That pair stays one piece. NBSP and U+3000 are in the whitespace class | `tests/pretokenize.rkt`: "Unicode whitespace is not treated as punctuation" |
 | `merges.txt` starts with `#version: 0.2`, which must not take rank 0 | The line is skipped, and the first pair keeps rank 0 | `tests/merges.rkt`: "the #version line is not a merge" |
-| U+001C–U+001F might be whitespace for one reference tokenizer and punctuation for the other | tiktoken 0.9.0 and the slow GPT2Tokenizer from transformers 4.46.3 encode the bare characters and a leading space the same way, so the fixture keeps those ids | `tests/tokenizer-cases.rkt`: "encode matches the reference ids and decode round-trips" (`file-separator`, `space-file-separator`, and the group, record, and unit separators) |
+| U+001C–U+001F might be whitespace for one reference tokenizer and punctuation for the other | tiktoken 0.9.0 and the slow GPT2Tokenizer from transformers 4.46.3 encode the bare characters and a leading space the same way, so the fixture keeps those ids. `"\n\n\x1ca"` is `[198, 198, 216, 64]`; treating U+001C as whitespace would merge the newlines into `628` | `tests/tokenizer-cases.rkt`: "encode matches the reference ids and decode round-trips" (`file-separator`, `space-file-separator`, `newlines-file-separator`, and the group, record, and unit separators) |
