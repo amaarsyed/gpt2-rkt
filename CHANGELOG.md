@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Use one future block per processor for matrix products.
+- Compute only visible causal attention, with request-owned score storage.
+- Size generation caches to the prompt and requested output length.
+- Reuse fresh product buffers for GELU and residual additions.
+- Select top-k IDs with a bounded heap, preserving lower IDs on ties.
+- Add alternating baseline/phase 8 measurements and timed allocation counts.
+
 ## 0.1.0
 
 Pure-Racket GPT-2 Small inference on Racket CS. Published numbers for a
