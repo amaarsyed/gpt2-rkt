@@ -23,6 +23,12 @@ jobs:
           variant: CS
           version: "9.3"
 
+      - name: Cache pinned BPE files
+        uses: actions/cache@v4
+        with:
+          path: models/gpt2
+          key: gpt2-bpe-${{ hashFiles('tools/gpt2-assets.sha256') }}
+
       - name: Fetch pinned BPE files
         run: sh tools/fetch-gpt2-vocab.sh
 
