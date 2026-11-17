@@ -118,7 +118,7 @@
     (list (format "racket-version: ~a" (version))
           (format "vm: ~a" (system-type 'vm))
           "workload: flvector-dot"
-          "note: placeholder kernel until model load exists; one token is one dot product"
+          "note: placeholder kernel for the CI smoke; the model benchmark is bench/run.rkt. One token is one dot product"
           "note: peak-bytes is current-memory-use 'peak, the process high-water mark across collections. A later prompt length measured in the same process includes the earlier peak. The harness entry point measures each length in its own process.")
     (apply append
            (for/list ([sample (in-list samples)])

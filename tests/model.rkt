@@ -137,7 +137,9 @@
                  #:eos-id 50256))
     (define result (model-generate model '(0) 4))
     (check-equal? (generation-token-ids result) '(50256))
-    (check-equal? (generation-text result) ""))
+    (check-equal? (generation-text result) "")
+    (define continued (model-generate model '(0) 4 #:stop-at-eos? #f))
+    (check-equal? (generation-token-ids continued) '(50256 50256 50256 50256)))
 
   (test-case "generation stops at the eos token"
     (define wte (make-tensor '(4 2) (flvector 0.0 1.0
