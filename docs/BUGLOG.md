@@ -20,3 +20,4 @@ Risks called out before implementation. The code already matched the intended be
 | Byte map must round-trip all 256 bytes, with space at U+0120 | Every byte maps to a distinct character and back | `tests/bpe-bytes.rkt`: "byte map round-trips every byte" |
 | Contractions are case-sensitive (`'m` merges, `'M` does not) | Lowercase patterns only | `tests/pretokenize.rkt`: "contractions are case-sensitive" |
 | ASCII-only `\s` splits a newline followed by NBSP | That pair stays one piece. NBSP and U+3000 are in the whitespace class | `tests/pretokenize.rkt`: "Unicode whitespace is not treated as punctuation" |
+| `merges.txt` starts with `#version: 0.2`, which must not take rank 0 | The line is skipped, and the first pair keeps rank 0 | `tests/merges.rkt`: "the #version line is not a merge" |
