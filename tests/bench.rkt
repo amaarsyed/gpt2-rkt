@@ -25,8 +25,8 @@
   (test-case "greedy ids are the same on every call"
     (define model (load-model tiny-dir))
     (define ids '(1))
-    (define once (greedy-ids model ids 4 1))
-    (define twice (greedy-ids model ids 4 1))
+    (define once (greedy-ids model ids 4))
+    (define twice (greedy-ids model ids 4))
     (check-equal? twice once)
     (check-equal? (length once) 4))
 
@@ -41,7 +41,7 @@
                           (hasheq 'pid 13 'tokens 128 'median_ms 2.0 'peak_bytes 22)
                           (hasheq 'pid 14 'tokens 512 'median_ms 3.0 'peak_bytes 23)
                           (hasheq 'pid 15 'tokens 1000 'median_ms 4.0 'peak_bytes 24))
-                    (hasheq 'pid 16 'new_tokens 128 'tokens_per_sec 5.0
+                    (hasheq 'pid 16 'new_tokens 128 'prompt_tokens 4 'tokens_per_sec 5.0
                             'peak_bytes 25 'ids '(11 262))
                     (list (hasheq 'pid 17 'rows 768 'in 768 'out 768 'gflops 1.5 'peak_bytes 26)
                           (hasheq 'pid 18 'rows 1 'in 768 'out 50257 'gflops 0.5 'peak_bytes 27))
@@ -50,7 +50,6 @@
                     #:not-m5-pro #t
                     #:model-dir "models/gpt2"
                     #:prompt default-prompt
-                    #:seed default-seed
                     #:runs default-runs))
     (check-true (isolated-configurations? report))
     (check-equal? (configuration-pids report) '(11 12 13 14 15 16 17 18))
@@ -58,11 +57,35 @@
     (check-true (string-contains? text "Reference run, not the M5 Pro."))
     (check-true (string-contains? text "prefill 16"))
     (check-true (string-contains? text "prefill 1000"))
-    (check-true (string-contains? text "decode 128"))
+    (check-true (string-contains? text "decode 128 (incl. 4-token prefill)"))
+    (check-true (string-contains? text "include loading the weights"))
+    (check-false (string-contains? text "seed:"))
     (check-true (string-contains? text "768×768×768"))
     (check-true (string-contains? text "1×768×50257"))
     (check-false (isolated-configurations?
                   (hash-set report 'decode (hash-set (hash-ref report 'decode) 'pid 11)))))
+
+  (test-case "a child that fills stderr still returns"
+    (define exec (find-system-path 'exec-file))
+    (define racket (if (complete-path? exec) exec (or (find-executable-path exec) exec)))
+    (define-values (proc out in err)
+      (subprocess #f #f #f racket "-e"
+                  "(display (make-string 200000 #\\x) (current-error-port)) (flush-output (current-error-port)) (display \"ok\\n\")"))
+    (close-output-port in)
+    (define result-ch (make-channel))
+    (define worker
+      (thread
+       (lambda ()
+         (channel-put result-ch
+                      (with-handlers ([exn:fail? (lambda (e) (list 'exn (exn-message e)))])
+                        (define-values (text err-text status)
+                          (drain-subprocess-ports proc out err))
+                        (list text (string-length err-text) status))))))
+    (define result (sync/timeout 10 result-ch))
+    (unless result
+      (subprocess-kill proc #t)
+      (kill-thread worker))
+    (check-equal? result '("ok\n" 200000 0)))
 
   (test-case "the CPU name is non-empty on this host"
     (define name (host-cpu-name))
