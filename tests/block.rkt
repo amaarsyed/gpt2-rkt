@@ -285,4 +285,29 @@
                                   #:abs fixture-abs-tol
                                   #:rel 0.0)
                 (format "ln_f max abs error ~a" (max-abs-error (elements final) expected-final))))
+
+  (test-case "a cached block row matches the full block"
+    (define x (make-tensor '(3 4)
+                           (flvector 0.2 -0.4 0.1 0.5
+                                     -0.3 0.6 0.2 -0.1
+                                     0.4 0.1 -0.5 0.3)))
+    (define w (make-block-params #:n-head 2
+                                 #:ln1-gain (filled '(4) 1.0)
+                                 #:ln1-bias (filled '(4) 0.0)
+                                 #:c-attn-w (flvector-tensor '(4 12) 3)
+                                 #:c-attn-b (filled '(12) 0.01)
+                                 #:attn-proj-w (flvector-tensor '(4 4) 5)
+                                 #:attn-proj-b (filled '(4) 0.0)
+                                 #:ln2-gain (filled '(4) 1.0)
+                                 #:ln2-bias (filled '(4) 0.0)
+                                 #:c-fc-w (flvector-tensor '(4 16) 7)
+                                 #:c-fc-b (filled '(16) 0.0)
+                                 #:mlp-proj-w (flvector-tensor '(16 4) 9)
+                                 #:mlp-proj-b (filled '(4) 0.0)))
+    (define full (gpt2-block x w))
+    (define-values (prefix k v) (gpt2-block-cached (slice-rows x 0 2) w #f #f))
+    (define-values (last _k _v) (gpt2-block-cached (slice-rows x 2 3) w k v))
+    (check-equal? (elements last) (elements (slice-rows full 2 3)))
+    (define-values (again _k2 _v2) (gpt2-block-cached x w #f #f))
+    (check-equal? (elements again) (elements full)))
   )

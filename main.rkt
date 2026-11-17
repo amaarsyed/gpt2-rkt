@@ -9,6 +9,7 @@
          "src/embed.rkt"
          "src/errors.rkt"
          "src/generate.rkt"
+         "src/model.rkt"
          "src/model-assets.rkt"
          "src/nn.rkt"
          "src/pretokenize.rkt"
@@ -20,6 +21,11 @@
          top-help-text
          generate-help-text
          generate
+         load-model
+         next-token-logits
+         generation?
+         generation-token-ids
+         generation-text
          generate-config
          generate-config?
          generate-config-model-dir

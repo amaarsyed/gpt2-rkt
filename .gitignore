@@ -1,6 +1,7 @@
 # Downloaded model weights. Never commit these.
 models/
 *.safetensors
+!tests/tiny-gpt2/model.safetensors
 
 # Racket bytecode.
 compiled/

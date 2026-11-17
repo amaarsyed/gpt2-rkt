@@ -93,28 +93,34 @@
     (check-usage '("generate" "--model-dir" "m" "--prompt" "hi" "--max-new-tokens" "nope")
                  #px"invalid --max-new-tokens: nope")
     (check-usage '("generate" "--model-dir" "m" "--prompt" "hi" "--max-new-tokens" "1"
+                               "--temperature" "0")
+                 #px"temperature must be a finite number > 0")
+    (check-usage '("generate" "--model-dir" "m" "--prompt" "hi" "--max-new-tokens" "1"
                                "--temperature" "-0.1")
-                 #px"temperature must be a finite number >= 0")
+                 #px"temperature must be a finite number > 0")
     (check-usage '("generate" "--model-dir" "m" "--prompt" "hi" "--max-new-tokens" "1"
                                "--temperature" "hot")
                  #px"invalid --temperature: hot")
     (check-usage '("generate" "--model-dir" "m" "--prompt" "hi" "--max-new-tokens" "1"
                                "--temperature" "+inf.0")
-                 #px"temperature must be a finite number >= 0")
+                 #px"temperature must be a finite number > 0")
     (check-usage '("generate" "--model-dir" "m" "--prompt" "hi" "--max-new-tokens" "1"
                                "--temperature" "+nan.0")
-                 #px"temperature must be a finite number >= 0")
+                 #px"temperature must be a finite number > 0")
     (check-usage '("generate" "--model-dir" "m" "--prompt" "hi" "--max-new-tokens" "1"
-                               "--temperature" "0" "--top-k" "0")
+                               "--temperature" "0.8" "--top-k" "0")
                  #px"top-k must be an integer >= 1")
     (check-usage '("generate" "--model-dir" "m" "--prompt" "hi" "--max-new-tokens" "1"
                                "--temperature" "0.8" "--seed" "-1")
                  #px"seed must be an integer >= 0")
     (check-usage '("generate" "--model-dir" "m" "--prompt" "hi" "--max-new-tokens" "1"
+                               "--temperature" "0.8" "--seed" "3000000000")
+                 #px"seed must be an integer from 0 through 2147483647")
+    (check-usage '("generate" "--model-dir" "m" "--prompt" "hi" "--max-new-tokens" "1"
                                "--top-k" "40")
                  #px"top-k requires temperature > 0")
     (check-usage '("generate" "--model-dir" "m" "--prompt" "hi" "--max-new-tokens" "1"
-                               "--temperature" "0" "--seed" "1")
+                               "--seed" "1")
                  #px"seed requires temperature > 0")
     (check-usage '("generate" "--model-dir" "m" "--prompt" "hi" "--max-new-tokens" "1"
                                "--unknown" "x")
@@ -151,13 +157,19 @@
     (check-equal? (generate-config-temperature cfg) 0.8)
     (check-equal? (generate-config-top-k cfg) 40)
     (check-equal? (generate-config-seed cfg) 1)
-    (define zero
+    (define biggest
       (parse-generate-args '("--model-dir" "models/gpt2"
                              "--prompt" "hi"
-                             "--max-new-tokens=4"
-                             "--temperature=0")))
-    (check-equal? (generate-config-temperature zero) 0.0)
-    (check-equal? (generate-config-max-new-tokens zero) 4))
+                             "--max-new-tokens" "1"
+                             "--temperature" "0.8"
+                             "--seed" "2147483647")))
+    (check-equal? (generate-config-seed biggest) 2147483647)
+    (check-exn exn:fail:gpt2?
+               (lambda ()
+                 (parse-generate-args '("--model-dir" "models/gpt2"
+                                        "--prompt" "hi"
+                                        "--max-new-tokens=4"
+                                        "--temperature=0")))))
 
   (test-case "constructor rejects an invalid config"
     (check-exn exn:fail:gpt2?
@@ -207,7 +219,7 @@
        (check-false (string-contains? (outcome-err result) "config.json")))
      (lambda () (delete-directory/files dir))))
 
-  (test-case "present assets stop at unimplemented loading"
+  (test-case "empty assets fail while reading the config"
     (define dir (make-temporary-file "gpt2-rkt-~a" 'directory))
     (dynamic-wind
      void
@@ -217,9 +229,15 @@
        (define result
          (check-usage (generate-argv (path->string dir) "--max-new-tokens" "2"
                                      "--temperature" "0.5" "--top-k" "4" "--seed" "7")
-                      #px"model loading is not implemented"))
+                      #px"config.json"))
        (check-false (regexp-match? #px"missing model assets" (outcome-err result))))
      (lambda () (delete-directory/files dir))))
+
+  (test-case "a short position table rejects a long generation"
+    (check-usage '("generate" "--model-dir" "tiny-gpt2"
+                   "--prompt" "hi" "--max-new-tokens" "40")
+                 #px"limit 32")
+    (void))
 
   (test-case "run-cli rejects a non-string argument"
     (check-exn exn:fail:contract?

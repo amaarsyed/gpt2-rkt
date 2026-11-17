@@ -11,13 +11,18 @@
          "bpe-bytes.rkt"
          "errors.rkt"
          "merges.rkt"
-         "pretokenize.rkt")
+         "pretokenize.rkt"
+         "utf8-stream.rkt")
 
 (provide load-tokenizer
          make-tokenizer
          tokenizer?
          encode
          decode
+         make-token-decoder
+         token-decoder-add
+         token-decoder-finish
+         token-decoder-text
          endoftext-token
          endoftext-id)
 
@@ -167,23 +172,44 @@
        (append (encode-plain tok (substring text start found))
                (cons id (loop (+ found (string-length endoftext-token)))))])))
 
+(define (token-bytes tok id)
+  (unless (exact-nonnegative-integer? id)
+    (raise-argument-error 'decode "exact-nonnegative-integer?" id))
+  (define text
+    (hash-ref (tokenizer-id->token tok) id
+              (lambda ()
+                (raise-gpt2 (format "unknown token id: ~a" id)))))
+  (define n (string-length text))
+  (define bs (make-bytes n))
+  (for ([i (in-range n)])
+    (bytes-set! bs i (bpe-char->byte (string-ref text i))))
+  bs)
+
+(struct token-decoder (tok stream)
+  #:constructor-name raw-token-decoder)
+
+(define (make-token-decoder tok)
+  (unless (tokenizer? tok)
+    (raise-argument-error 'make-token-decoder "tokenizer?" tok))
+  (raw-token-decoder tok (make-utf8-stream)))
+
+(define (token-decoder-add dec id)
+  (utf8-stream-add (token-decoder-stream dec)
+                   (token-bytes (token-decoder-tok dec) id)))
+
+(define (token-decoder-finish dec)
+  (utf8-stream-finish (token-decoder-stream dec)))
+
+(define (token-decoder-text dec)
+  (utf8-stream-text (token-decoder-stream dec)))
+
 (define (decode tok ids)
   (unless (tokenizer? tok)
     (raise-argument-error 'decode "tokenizer?" tok))
   (unless (list? ids)
     (raise-argument-error 'decode "list?" ids))
-  (define text
-    (let ([out (open-output-string)])
-      (for ([id (in-list ids)])
-        (unless (exact-nonnegative-integer? id)
-          (raise-argument-error 'decode "exact-nonnegative-integer?" id))
-        (display (hash-ref (tokenizer-id->token tok) id
-                           (lambda ()
-                             (raise-gpt2 (format "unknown token id: ~a" id))))
-                 out))
-      (get-output-string out)))
-  (define n (string-length text))
-  (define bs (make-bytes n))
-  (for ([i (in-range n)])
-    (bytes-set! bs i (bpe-char->byte (string-ref text i))))
-  (bytes->string/utf-8 bs #\uFFFD))
+  (define dec (make-token-decoder tok))
+  (for ([id (in-list ids)])
+    (token-decoder-add dec id))
+  (token-decoder-finish dec)
+  (token-decoder-text dec))
