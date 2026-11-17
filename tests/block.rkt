@@ -45,7 +45,8 @@
                            c-proj-w
                            c-proj-b))))
 
-  (define (flvector-tensor dims n salt)
+  (define (flvector-tensor dims salt)
+    (define n (apply * dims))
     (make-tensor dims
                  (flvector-by n (lambda (i)
                                   (real->double-flonum (/ (remainder (+ i salt) 7) 10.0))))))
@@ -158,15 +159,15 @@
       (params 1
               (filled '(2) 1.0)
               (make-tensor '(2) (flvector 0.1 -0.1))
-              (flvector-tensor '(2 6) 6 salt)
+              (flvector-tensor '(2 6) salt)
               (filled '(6) 0.0)
-              (flvector-tensor '(2 2) 4 (+ salt 1))
+              (flvector-tensor '(2 2) (+ salt 1))
               (filled '(2) 0.0)
               (filled '(2) 1.0)
               (make-tensor '(2) (flvector -0.05 0.05))
-              (flvector-tensor '(2 8) 8 (+ salt 2))
+              (flvector-tensor '(2 8) (+ salt 2))
               (filled '(8) 0.0)
-              (flvector-tensor '(8 2) 8 (+ salt 3))
+              (flvector-tensor '(8 2) (+ salt 3))
               (filled '(2) 0.0)))
     (define b1 (one 1))
     (define b2 (one 4))
