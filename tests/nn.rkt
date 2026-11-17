@@ -42,6 +42,7 @@
     (define W (make-tensor '(2 2) (flvector 1.0 0.0 0.0 1.0)))
     (define b (make-tensor '(2) (flvector 0.0 0.0)))
     (check-exn #rx"\\(2 3\\)" (lambda () (matmul x W b)))
+    (check-exn #rx"\\(2 2\\)" (lambda () (matmul x W b)))
     (check-exn #rx"bias"
                (lambda ()
                  (matmul (make-tensor '(1 2) (flvector 1.0 2.0))
@@ -123,6 +124,12 @@
                  (layer-norm (make-tensor '(2) (flvector 1.0 2.0))
                              (make-tensor '(1) (flvector 1.0))
                              (make-tensor '(2) (flvector 0.0 0.0))))))
+
+  (test-case "layer-norm of a constant row is the bias"
+    (define flat (layer-norm (make-tensor '(4) (flvector 7.0 7.0 7.0 7.0))
+                             (make-tensor '(4) (flvector 9.0 8.0 7.0 6.0))
+                             (make-tensor '(4) (flvector -1.0 0.5 2.0 3.0))))
+    (check-equal? (elements flat) '(-1.0 0.5 2.0 3.0)))
 
   (test-case "gelu matches the tanh approximation at fixed inputs"
     (define y (gelu (make-tensor '(2 3) (flvector 0.0 1.0 -1.0
