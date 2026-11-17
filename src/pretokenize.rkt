@@ -4,7 +4,7 @@
 ;;   's|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+
 ;;
 ;; pregexp's \s is ASCII-only. The class below is the Unicode White_Space
-;; set that Python's regex module uses for \s (25 code points, not U+180E).
+;; set used for \s by the reference regex engine (25 code points, not U+180E).
 ;; The trailing alternative is \s+(?!\S): whitespace that is not followed
 ;; by a non-whitespace. That is not the same as (?!\s).
 
