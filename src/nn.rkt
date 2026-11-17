@@ -3,8 +3,10 @@
 ;; GPT-2 numeric kernels. Storage is row-major flvectors.
 ;; matmul is HF Conv1D: y[n, out] = x[n, in] · W[in, out] + b[out].
 ;; The inner loops are i-k-j so each step reads a contiguous W row.
-;; Wide problems are split across rows. A short problem, including a
-;; single-token logits multiply, is split across output columns.
+;; A multiply below parallel-work-threshold flops runs in one thread, so
+;; a small per-head attention matmul does not spawn futures. Larger
+;; problems split across rows, or across output columns when the row
+;; count is short, which still covers a single-token logits multiply.
 ;; matmul-transposed-b is h[n, in] · Wᵀ with W stored as [out, in]
 ;; (tied wte). Its k loop dots two contiguous rows.
 
@@ -23,9 +25,12 @@
 
 (define layernorm-eps 1e-5)
 
-;; Below this length the future setup costs more than the arithmetic.
-;; A problem with fewer rows than this, and at least this many columns,
-;; is split across columns so a single-token matmul still runs in parallel.
+;; Below this many flops (rows × inner × cols) the future setup costs
+;; more than the arithmetic. Per-head attention stays under it. The
+;; logits multiply and the MLP stay over it.
+(define parallel-work-threshold 100000)
+;; Once a problem is large enough to parallelize, split rows when there
+;; are at least this many, and output columns otherwise.
 (define parallel-axis-threshold 32)
 ;; More blocks than cores, so a slow core does not set the wall time.
 (define parallel-block-multiple 4)
@@ -58,6 +63,10 @@
                            "expected a rank-2 tensor"
                            "dims" (dims->string dims)))
   (values (car dims) (cadr dims) (tensor-data t)))
+
+(define (parallel-work? n in out)
+  (and (fx>= (processor-count) 2)
+       (>= (* n in out) parallel-work-threshold)))
 
 (define (for-parallel-blocks total proc)
   (define cpus (processor-count))
@@ -157,6 +166,8 @@
   (define y (make-flvector (fx* n out)))
   (define bdata (tensor-data b))
   (cond
+    [(not (parallel-work? n in out))
+     (fill-matmul! y xdata wdata bdata in out 0 n 0 out)]
     [(fx>= n parallel-axis-threshold)
      (for-parallel-blocks n
        (lambda (i0 i1)
@@ -212,6 +223,8 @@
                            "W" (dims->string (tensor-dims W))))
   (define y (make-flvector (fx* n out)))
   (cond
+    [(not (parallel-work? n in out))
+     (fill-transposed! y hdata wdata in out 0 n 0 out)]
     [(fx>= n parallel-axis-threshold)
      (for-parallel-blocks n
        (lambda (i0 i1)
