@@ -124,6 +124,20 @@
     (check-equal? (elements (tensor-data second))
                   (elements (next-token-logits model '(1 3)))))
 
+  (test-case "interleaved requests keep their caches and earlier outputs"
+    (define model
+      (make-gpt2 #:wte (numbered 5 4) #:wpe (numbered 8 4)
+                 #:blocks (list (block 4 2 1) (block 4 4 2))
+                 #:ln-gain (filled '(4) 1.0) #:ln-bias (filled '(4) 0.0) #:eos-id 0))
+    (define-values (a ca) (model-forward model '(1) (empty-kv-cache model #:capacity 4)))
+    (define saved (elements (tensor-data a)))
+    (define-values (b cb) (model-forward model '(3) (empty-kv-cache model #:capacity 4)))
+    (define-values (a2 _ca2) (model-forward model '(2) ca))
+    (define-values (b2 _cb2) (model-forward model '(4) cb))
+    (check-equal? (elements (tensor-data a2)) (elements (next-token-logits model '(1 2))))
+    (check-equal? (elements (tensor-data b2)) (elements (next-token-logits model '(3 4))))
+    (check-equal? (elements (tensor-data a)) saved))
+
   (test-case "generation stops on token 50256"
     (define vocab 50257)
     (define data (make-flvector (* vocab 2) 0.0))
