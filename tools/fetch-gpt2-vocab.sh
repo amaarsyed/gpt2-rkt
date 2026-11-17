@@ -2,6 +2,7 @@
 # Download the pinned GPT-2 Small files: tokenizer, config, and weights.
 # Pinned to openai-community/gpt2 at 607a30d783dfa663caf39e06633721c8d4cfcd7e.
 # Digests live in tools/gpt2-assets.sha256. The weights stay out of git.
+# GPT2_FETCH_WEIGHTS=0 skips model.safetensors. The default downloads it.
 
 set -eu
 
@@ -58,6 +59,14 @@ fetch() {
 }
 
 for name in $(awk 'NF >= 2 && $1 !~ /^#/ { print $2 }' "$assets"); do
+  case "$name" in
+    *.safetensors)
+      if [ "${GPT2_FETCH_WEIGHTS:-1}" = "0" ]; then
+        echo "skipping $name (GPT2_FETCH_WEIGHTS=0)" >&2
+        continue
+      fi
+      ;;
+  esac
   fetch "$name"
 done
 
