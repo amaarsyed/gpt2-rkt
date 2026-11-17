@@ -2,7 +2,8 @@
 
 (require racket/string
          "errors.rkt"
-         "model-assets.rkt")
+         "model.rkt"
+         "tokenizer.rkt")
 
 (provide generate
          generate-config
@@ -15,7 +16,8 @@
          generate-config-seed)
 
 ;; `temperature`, `top-k`, and `seed` are #f when omitted.
-;; Temperature is stored as a flonum. Omitted or 0 means greedy decoding.
+;; Temperature is stored as a flonum. Omitted means greedy decoding.
+;; Zero and below are errors.
 ;; This guard is the only range check; the CLI parser only decodes argv.
 (struct generate-config (model-dir prompt max-new-tokens temperature top-k seed)
   #:transparent
@@ -30,14 +32,16 @@
     (define temp
       (cond
         [(not temperature) #f]
-        [(and (real? temperature) (rational? temperature) (>= temperature 0))
+        [(and (real? temperature) (rational? temperature) (> temperature 0))
          (real->double-flonum temperature)]
         [else
-         (raise-gpt2 "temperature must be a finite number >= 0")]))
+         (raise-gpt2 "temperature must be a finite number > 0")]))
     (unless (or (not top-k) (exact-positive-integer? top-k))
       (raise-gpt2 "top-k must be an integer >= 1"))
     (unless (or (not seed) (exact-nonnegative-integer? seed))
       (raise-gpt2 "seed must be an integer >= 0"))
+    (when (and seed (>= seed (expt 2 31)))
+      (raise-gpt2 "seed must be an integer from 0 through 2147483647"))
     (define sampling? (and temp (> temp 0.0)))
     (when (and top-k (not sampling?))
       (raise-gpt2 "top-k requires temperature > 0"))
@@ -45,10 +49,17 @@
       (raise-gpt2 "seed requires temperature > 0"))
     (values model-dir prompt max-new-tokens temp top-k seed)))
 
-(define (generate cfg)
+(define (generate cfg #:output-port [out #f])
   (unless (generate-config? cfg)
     (raise-argument-error 'generate "generate-config?" cfg))
-  (define problem (missing-model-assets-message (generate-config-model-dir cfg)))
-  (when problem
-    (raise-gpt2 problem))
-  (raise-gpt2 "model loading is not implemented"))
+  (define model (load-model (generate-config-model-dir cfg)))
+  (define ids (encode (gpt2-model-tokenizer model) (generate-config-prompt cfg)))
+  (define result
+    (model-generate model ids (generate-config-max-new-tokens cfg)
+                    #:temperature (generate-config-temperature cfg)
+                    #:top-k (generate-config-top-k cfg)
+                    #:seed (generate-config-seed cfg)
+                    #:output-port out))
+  (when out
+    (newline out))
+  result)

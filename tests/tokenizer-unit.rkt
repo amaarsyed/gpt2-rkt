@@ -1,7 +1,9 @@
 #lang racket/base
 
 (module+ test
-  (require rackunit
+  (require racket/string
+           rackunit
+           "../src/bpe-bytes.rkt"
            "../src/errors.rkt"
            "../src/merges.rkt"
            "../src/tokenizer.rkt")
@@ -32,4 +34,20 @@
     (check-equal? (encode tok "a<|endoftext|>b") '(0 50256 1))
     (check-equal? (decode tok '(50256)) "<|endoftext|>")
     (check-equal? endoftext-id 50256))
+
+  (test-case "a multi-byte character split across tokens is buffered"
+    ;; U+00E9 is the UTF-8 bytes C3 A9. Each byte is its own token.
+    (define lead (string (bpe-byte->char #xC3)))
+    (define cont (string (bpe-byte->char #xA9)))
+    (define tok (make-tokenizer (hash "A" 0 lead 1 cont 2) (hash)))
+    (define dec (make-token-decoder tok))
+    (check-equal? (token-decoder-add dec 0) "A")
+    (check-equal? (token-decoder-add dec 1) "")
+    (check-false (string-contains? (token-decoder-text dec) "\uFFFD"))
+    (check-equal? (token-decoder-add dec 2) "é")
+    (check-equal? (token-decoder-finish dec) "")
+    (check-equal? (decode tok '(0 1 2)) "Aé")
+    (define stuck (make-token-decoder tok))
+    (check-equal? (token-decoder-add stuck 1) "")
+    (check-equal? (token-decoder-finish stuck) "\uFFFD"))
   )
