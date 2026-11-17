@@ -128,18 +128,18 @@
   (for ([i (in-range (* n cols))])
     (flvector-set! to (+ base i) (flvector-ref from i))))
 
-;; past-k and past-v are earlier rows, or #f. Without #:filled the new
-;; rows are copied onto a fresh tensor. With #:filled the buffers are
-;; already n_positions long, the new rows are written at that index, and
-;; attend sees only the filled prefix.
-(define (gpt2-block-cached x params past-k past-v #:filled [filled #f])
+;; past-k and past-v are preallocated buffers. The new rows are written
+;; at #:filled, and attend sees only the filled prefix.
+(define (gpt2-block-cached x params past-k past-v #:filled filled)
   (unless (block-params? params)
     (raise-argument-error 'gpt2-block-cached "block-params?" params))
-  (when (or (and past-k (not past-v)) (and past-v (not past-k)))
+  (unless (and (tensor? past-k) (tensor? past-v))
     (raise-arguments-error 'gpt2-block-cached
-                           "k and v caches must both be present"
+                           "k and v caches must be tensors"
                            "k" past-k
                            "v" past-v))
+  (unless (exact-nonnegative-integer? filled)
+    (raise-argument-error 'gpt2-block-cached "exact-nonnegative-integer?" filled))
   (define ln1 (layer-norm x
                           (block-params-ln1-gain params)
                           (block-params-ln1-bias params)))
@@ -148,27 +148,18 @@
                         (block-params-c-attn-b params)))
   (define-values (q k v) (qkv-split mixed))
   (define nq (car (tensor-dims k)))
-  (define-values (kall vall kv-rows)
-    (cond
-      [(not past-k) (values k v nq)]
-      [filled
-       (define cap (car (tensor-dims past-k)))
-       (unless (and (= cap (car (tensor-dims past-v)))
-                    (<= (+ filled nq) cap))
-         (raise-arguments-error 'gpt2-block-cached
-                                "the cache is shorter than the next rows"
-                                "filled" filled
-                                "new" nq
-                                "capacity" cap))
-       (write-rows! past-k filled k)
-       (write-rows! past-v filled v)
-       (values past-k past-v (+ filled nq))]
-      [else
-       (define prefix (car (tensor-dims past-k)))
-       (values (tensor-append-rows past-k k)
-               (tensor-append-rows past-v v)
-               (+ prefix nq))]))
-  (define heads (attend q kall vall (block-params-n-head params) #:kv-rows kv-rows))
+  (define cap (car (tensor-dims past-k)))
+  (unless (and (= cap (car (tensor-dims past-v)))
+               (<= (+ filled nq) cap))
+    (raise-arguments-error 'gpt2-block-cached
+                           "the cache is shorter than the next rows"
+                           "filled" filled
+                           "new" nq
+                           "capacity" cap))
+  (write-rows! past-k filled k)
+  (write-rows! past-v filled v)
+  (define kv-rows (+ filled nq))
+  (define heads (attend q past-k past-v (block-params-n-head params) #:kv-rows kv-rows))
   (define attn (matmul heads
                        (block-params-attn-proj-w params)
                        (block-params-attn-proj-b params)))
@@ -181,7 +172,7 @@
                         (block-params-c-fc-b params)
                         (block-params-mlp-proj-w params)
                         (block-params-mlp-proj-b params)))
-  (values (tensor-add residual1 mlp) kall vall))
+  (values (tensor-add residual1 mlp) past-k past-v))
 
 (define (gpt2-blocks x params-list)
   (unless (list? params-list)
