@@ -191,6 +191,22 @@
                    (model-generate model '(0) 1 #:temperature 1e-310 #:seed 1))
                   '(0)))
 
+  (test-case "last-only logits match the last row of the full head"
+    (define model
+      (make-gpt2 #:wte (filled '(4 2) 0.25)
+                 #:wpe (filled '(4 2) 0.1)
+                 #:blocks (list (zero-block 2))
+                 #:ln-gain (filled '(2) 1.0)
+                 #:ln-bias (filled '(2) 0.0)
+                 #:eos-id 3))
+    (define ids '(0 1 2))
+    (define-values (full _cache) (model-forward model ids (empty-kv-cache model)))
+    (check-equal? (tensor-dims full) '(3 4))
+    (define src (tensor-data full))
+    (define last (next-token-logits model ids))
+    (check-equal? (for/list ([j (in-range 4)]) (flvector-ref last j))
+                  (for/list ([j (in-range 4)]) (flvector-ref src (+ 8 j)))))
+
   (test-case "generation uses the model's position count"
     (define model
       (make-gpt2 #:wte (filled '(2 2) 0.0)

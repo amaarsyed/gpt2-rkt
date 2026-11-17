@@ -93,6 +93,11 @@
 (define (tied-logits h wte)
   (matmul-transposed-b h wte))
 
+(define (tensor-row t row)
+  (define cols (cadr (tensor-dims t)))
+  (define base (* row cols))
+  (make-tensor (list 1 cols) (flvector-copy (tensor-data t) base (+ base cols))))
+
 (define (model-activations model ids)
   (unless (gpt2-model? model)
     (raise-argument-error 'model-activations "gpt2-model?" model))
@@ -110,9 +115,10 @@
   (define hidden (layer-norm final
                              (gpt2-model-ln-gain model)
                              (gpt2-model-ln-bias model)))
-  (activation-trace embed (reverse blocks) hidden (tied-logits hidden (gpt2-model-wte model))))
+  (define last (tensor-row hidden (sub1 (car (tensor-dims hidden)))))
+  (activation-trace embed (reverse blocks) hidden (tied-logits last (gpt2-model-wte model))))
 
-(define (model-forward model ids cache)
+(define (model-forward model ids cache #:last-only [last-only #f])
   (unless (gpt2-model? model)
     (raise-argument-error 'model-forward "gpt2-model?" model))
   (unless (and (list? ids) (andmap exact-nonnegative-integer? ids))
@@ -132,7 +138,11 @@
         (gpt2-block-cached hidden params (and past (car past)) (and past (cdr past))))
       (values out (cons (cons k v) acc))))
   (define hidden (layer-norm y (gpt2-model-ln-gain model) (gpt2-model-ln-bias model)))
-  (values (tied-logits hidden (gpt2-model-wte model))
+  (define scored
+    (if last-only
+        (tensor-row hidden (sub1 (car (tensor-dims hidden))))
+        hidden))
+  (values (tied-logits scored (gpt2-model-wte model))
           (kv-cache (reverse layers) (+ start n))))
 
 (define (last-row logits)
@@ -149,7 +159,8 @@
 (define (next-token-logits model ids)
   (when (null? ids)
     (raise-gpt2 "next-token-logits needs at least one token"))
-  (define-values (logits _cache) (model-forward model ids (empty-kv-cache model)))
+  (define-values (logits _cache)
+    (model-forward model ids (empty-kv-cache model) #:last-only #t))
   (last-row logits))
 
 (define (argmax logits)
@@ -251,14 +262,15 @@
         (display piece out)
         (flush-output out))))
   (define-values (first-logits cache)
-    (model-forward model ids (empty-kv-cache model)))
+    (model-forward model ids (empty-kv-cache model) #:last-only #t))
   (define first (choose (last-row first-logits)))
   (emit-id first)
   (define new
     (let loop ([cache cache] [chosen first] [acc (list first)] [left (sub1 max-new)])
       (if (or (zero? left) (= chosen eos))
           (reverse acc)
-          (let-values ([(logits cache) (model-forward model (list chosen) cache)])
+            (let-values ([(logits cache)
+                          (model-forward model (list chosen) cache #:last-only #t)])
             (define nxt (choose (last-row logits)))
             (emit-id nxt)
             (loop cache nxt (cons nxt acc) (sub1 left))))))
