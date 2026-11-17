@@ -10,6 +10,7 @@
          racket/flonum
          racket/list
          racket/string
+         "attention.rkt"
          "block.rkt"
          "embed.rkt"
          "errors.rkt"
@@ -59,7 +60,7 @@
 ;; live is a box of this handle's position. model-forward clears it, so
 ;; the same handle cannot be advanced twice: the buffers are mutated in
 ;; place and a second call would overwrite the rows just written.
-(struct kv-cache (layers position live) #:transparent)
+(struct kv-cache (layers position live work) #:transparent)
 
 ;; One preallocated key/value buffer per layer. The shared position on
 ;; kv-cache is how many rows have been written.
@@ -97,7 +98,11 @@
      (layer-cache (make-tensor (list n d) (make-flvector (* n d) 0.0))
                   (make-tensor (list n d) (make-flvector (* n d) 0.0))))
    0
-   (box 0)))
+   (box 0)
+   (make-attention-work
+    (for/fold ([heads 1]) ([params (in-list (gpt2-model-blocks model))])
+      (max heads (block-params-n-head params)))
+    n)))
 
 (define (context-limit model)
   (min gpt2-context-length (gpt2-model-n-positions model)))
@@ -157,7 +162,8 @@
                            params
                            (layer-cache-k past)
                            (layer-cache-v past)
-                           #:filled start))
+                           #:filled start
+                           #:workspace (kv-cache-work cache)))
       (values out
               (cons (layer-cache k v) acc)
               (if trace (cons out outs) outs))))
@@ -167,7 +173,7 @@
         (tensor-row hidden (sub1 (car (tensor-dims hidden))))
         hidden))
   (define logits (tied-logits scored (gpt2-model-wte model)))
-  (define returned (kv-cache (reverse layers) (+ start n) (box (+ start n))))
+  (define returned (kv-cache (reverse layers) (+ start n) (box (+ start n)) (kv-cache-work cache)))
   (when trace
     (set-box! trace
               (activation-trace embed
@@ -295,7 +301,7 @@
         (display piece out)
         (flush-output out))))
   (define-values (first-logits cache)
-    (model-forward model ids (empty-kv-cache model) #:last-only #t))
+    (model-forward model ids (empty-kv-cache model #:capacity total) #:last-only #t))
   (define first (choose (last-row first-logits)))
   (emit-id first)
   (define new
