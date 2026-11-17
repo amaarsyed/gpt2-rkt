@@ -34,8 +34,8 @@
 ;; Once a problem is large enough to parallelize, split rows when there
 ;; are at least this many, and output columns otherwise.
 (define parallel-axis-threshold 32)
-;; More blocks than cores, so a slow core does not set the wall time.
-(define parallel-block-multiple 4)
+;; One block per processor avoids dozens of tiny decode futures.
+(define parallel-block-multiple 1)
 
 ;; tanh(x) = (e^{2x}-1)/(e^{2x}+1), saturated where the flonum result is ±1.
 (define (fltanh x)
