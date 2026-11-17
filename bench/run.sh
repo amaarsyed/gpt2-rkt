@@ -1,13 +1,14 @@
 #!/bin/sh
-# Verify the pinned GPT-2 files, then measure load, prefill, decode, and
-# matmul. Extra arguments are passed to bench/run.rkt, so
-# `sh bench/run.sh --runs 5` changes the run count.
+# Check the pinned GPT-2 files, then measure load, prefill, decode, and
+# matmul on whatever machine you run this on. Extra arguments are passed
+# to bench/run.rkt, so `sh bench/run.sh --runs 5` changes the run count.
 #
-# On the M5 Pro, install the full Racket CS 9.3 and put `racket` and
-# `raco` on PATH. A minimal Racket does not provide `raco test`. Expect
-# about 5 minutes or more; prefill at 1000 tokens is the longest step.
-# Keep the machine plugged in and idle. Commit the files written under
-# bench/results/. Do not pass --not-m5-pro on that machine.
+# Install the full Racket CS 9.3 distribution and put `racket` on PATH.
+# A minimal Racket does not provide `raco test`. The script is POSIX sh:
+# it runs on Linux and macOS, and on Windows from Git Bash, WSL, or
+# another Unix shell. Expect about five minutes or more. Prefill at
+# 1000 tokens is the longest step. Leave the machine idle, and on power
+# if it has a battery. Results are written under bench/results/.
 
 set -eu
 cd "$(dirname "$0")/.."
