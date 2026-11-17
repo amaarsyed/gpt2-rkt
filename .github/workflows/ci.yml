@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: raco test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Racket CS
+        uses: Bogdanp/setup-racket@v1.15
+        with:
+          architecture: x64
+          distribution: full
+          variant: CS
+          version: "9.3"
+
+      - name: Run tests
+        run: raco test .
+
+      - name: CLI help
+        run: |
+          racket main.rkt --help >help.txt
+          grep -q generate help.txt
+          rm -f help.txt
+
+      - name: Missing model assets
+        run: |
+          set +e
+          racket main.rkt generate --model-dir models/gpt2 --prompt "Once upon a time" --max-new-tokens 16 >stdout.txt 2>stderr.txt
+          code=$?
+          set -e
+          test "$code" -ne 0
+          grep -q "missing model assets" stderr.txt
+          test ! -s stdout.txt
+          cat stderr.txt
+          rm -f stdout.txt stderr.txt
+
+      - name: Benchmark harness
+        run: |
+          racket bench/harness.rkt >bench-out.txt
+          grep -q "^racket-version: " bench-out.txt
+          grep -q "^vm: chez-scheme$" bench-out.txt
+          grep -q "^prompt-length: 16$" bench-out.txt
+          grep -q "^prompt-length: 128$" bench-out.txt
+          rm -f bench-out.txt
