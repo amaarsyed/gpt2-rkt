@@ -1,8 +1,8 @@
 # gpt2-rkt
 
-The GPT-2 Small inference engine is written entirely in Racket, with no BLAS and no FFI.
+The GPT-2 inference engine is written entirely in Racket, with no BLAS and no FFI.
 
-GPT-2 Small (124M) is small enough to read and large enough to talk. This repository is that model in Racket: the byte-level tokenizer, the safetensors loader, the transformer, and the sampler. Arithmetic is Racket flonums. Parallelism is Racket futures on Racket CS. There is no C extension and no Python at runtime. The weights are the usual Hugging Face file. The forward pass is checked against an eager PyTorch reference.
+GPT-2 (124M) is small enough to read and large enough to talk. This repository is that model in Racket: the byte-level tokenizer, the safetensors loader, the transformer, and the sampler. Arithmetic is Racket flonums. Parallelism is Racket futures on Racket CS. There is no C extension and no Python at runtime. The weights are the usual Hugging Face file. The forward pass is checked against an eager PyTorch reference.
 
 Python scripts generate reference fixtures, PowerShell scripts coordinate Windows benchmarks, and shell scripts fetch assets and launch benchmarks. These are supporting tools; tokenization, weight loading, model computation, and generation run entirely in Racket. The engine is pure Racket; the repository includes tooling in other languages.
 
