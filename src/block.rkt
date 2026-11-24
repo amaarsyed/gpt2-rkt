@@ -6,7 +6,9 @@
 (require racket/flonum
          "attention.rkt"
          "nn.rkt"
-         "tensor.rkt")
+         "source-map.rkt"
+         "tensor.rkt"
+         "trace.rkt")
 
 (provide gpt2-mlp
          gpt2-mlp-hidden
@@ -140,12 +142,21 @@
                            "v" past-v))
   (unless (exact-nonnegative-integer? filled)
     (raise-argument-error 'gpt2-block-cached "exact-nonnegative-integer?" filled))
-  (define ln1 (layer-norm x
-                          (block-params-ln1-gain params)
-                          (block-params-ln1-bias params)))
-  (define mixed (matmul ln1
-                        (block-params-c-attn-w params)
-                        (block-params-c-attn-b params)))
+  (define obs (current-trace-observer))
+  (define ln1
+    (if-trace obs 'block-ln1
+      (stage block-ln1 layer-norm
+        (layer-norm x
+                    (block-params-ln1-gain params)
+                    (block-params-ln1-bias params)))
+      (lambda (y t0) (trace-activation! obs 'block-ln1 y t0))))
+  (define mixed
+    (if-trace obs 'block-qkv
+      (stage block-qkv matmul
+        (matmul ln1
+                (block-params-c-attn-w params)
+                (block-params-c-attn-b params)))
+      (lambda (y t0) (trace-activation! obs 'block-qkv y t0))))
   (define-values (nq mixed-width) (matrix-shape 'gpt2-block-cached mixed))
   (define-values (cap width) (matrix-shape 'gpt2-block-cached past-k))
   (unless (and (= mixed-width (* 3 width)) (equal? (tensor-dims past-k) (tensor-dims past-v)))
@@ -157,22 +168,90 @@
                            "filled" filled
                            "new" nq
                            "capacity" cap))
-  (write-qkv! past-k past-v filled mixed width)
+  (if (eq? obs #f)
+      (stage kv-write write-qkv!
+        (write-qkv! past-k past-v filled mixed width))
+      (let ([t0 (current-inexact-monotonic-milliseconds)])
+        (write-qkv! past-k past-v filled mixed width)
+        (trace-kv! obs (kv-write-record filled nq cap width) t0)))
   (define kv-rows (+ filled nq))
-  (define heads (attend mixed past-k past-v (block-params-n-head params)
-                        #:kv-rows kv-rows #:workspace workspace #:query-width width))
-  (define residual1 (matmul-add heads
-                                (block-params-attn-proj-w params)
-                                (block-params-attn-proj-b params)
-                                x))
-  (define ln2 (layer-norm residual1
-                          (block-params-ln2-gain params)
-                          (block-params-ln2-bias params)))
-  (define out (matmul-add (gpt2-mlp-hidden ln2 (block-params-c-fc-w params) (block-params-c-fc-b params))
+  (define heads
+    (if (eq? obs #f)
+        (attend mixed past-k past-v (block-params-n-head params)
+                #:kv-rows kv-rows #:workspace workspace #:query-width width)
+        (let ([t0 (current-inexact-monotonic-milliseconds)])
+          (define n-head (block-params-n-head params))
+          (define slots (make-vector n-head '()))
+          (define y
+            (parameterize ([current-trace-stage 'attend])
+              (attend mixed past-k past-v n-head
+                      #:kv-rows kv-rows #:workspace workspace #:query-width width
+                      #:weights-out slots)))
+          (trace-attention! obs slots)
+          (trace-activation! obs 'attend y t0)
+          y)))
+  (define residual1
+    (if-trace obs 'block-proj-res
+      (stage block-proj-res matmul-add
+        (matmul-add heads
+                    (block-params-attn-proj-w params)
+                    (block-params-attn-proj-b params)
+                    x))
+      (lambda (y t0) (trace-activation! obs 'block-proj-res y t0))))
+  (define ln2
+    (if-trace obs 'block-ln2
+      (stage block-ln2 layer-norm
+        (layer-norm residual1
+                    (block-params-ln2-gain params)
+                    (block-params-ln2-bias params)))
+      (lambda (y t0) (trace-activation! obs 'block-ln2 y t0))))
+  (define hidden
+    (if-trace obs 'mlp-gelu
+      (stage mlp-gelu gpt2-mlp-hidden
+        (gpt2-mlp-hidden ln2
+                         (block-params-c-fc-w params)
+                         (block-params-c-fc-b params)))
+      (lambda (y t0) (trace-activation! obs 'mlp-gelu y t0))))
+  (define out
+    (if (eq? obs #f)
+        (stage block-mlp-res matmul-add
+          (matmul-add hidden
+                      (block-params-mlp-proj-w params)
+                      (block-params-mlp-proj-b params)
+                      residual1))
+        (let ([t0 (current-inexact-monotonic-milliseconds)]
+              [cap (box #f)])
+          (define y
+            (parameterize ([current-trace-stage 'block-mlp-res]
+                           [current-trace-capture cap])
+              (matmul-add hidden
                           (block-params-mlp-proj-w params)
                           (block-params-mlp-proj-b params)
-                          residual1))
+                          residual1)))
+          (trace-activation! obs 'mlp-cproj (unbox cap) #f)
+          (trace-activation! obs 'block-mlp-res y t0)
+          y)))
   (values out past-k past-v))
+
+;; Layout of one KV write. elementBytes is the IEEE-754 width of an
+;; flvector slot. The write stores into the existing buffers; it does
+;; not allocate a key or value copy.
+(define (kv-write-record filled nq cap width)
+  (define element-bytes 8)
+  (hasheq 'filledBefore filled
+          'filledAfter (+ filled nq)
+          'capacity cap
+          'width width
+          'rowsWritten nq
+          'elementBytes element-bytes
+          'strideBytes (* width element-bytes)
+          'bytesWritten (* nq width element-bytes 2)
+          'kByteOffset (* filled width element-bytes)
+          'vByteOffset (* filled width element-bytes)
+          'srcStrideElements (* 3 width)
+          'dstStrideElements width
+          'zeroCopy #t
+          'layout "row-major flvector; distinct K and V buffers; head columns are read in place"))
 
 (define (gpt2-blocks x params-list)
   (unless (list? params-list)

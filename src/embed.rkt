@@ -5,7 +5,9 @@
 ;; start + n cannot pass 1024.
 
 (require racket/flonum
-         "tensor.rkt")
+         "source-map.rkt"
+         "tensor.rkt"
+         "trace.rkt")
 
 (provide gpt2-context-length
          token-embed
@@ -73,5 +75,9 @@
   (make-tensor (list n width) out))
 
 (define (input-embed wte wpe ids #:start [start 0])
-  (tensor-add (token-embed wte ids)
-              (position-embed wpe (length ids) #:start start)))
+  (define obs (current-trace-observer))
+  (if-trace obs 'input-embed
+    (stage input-embed input-embed
+      (tensor-add (token-embed wte ids)
+                  (position-embed wpe (length ids) #:start start)))
+    (lambda (y t0) (trace-activation! obs 'input-embed y t0))))
