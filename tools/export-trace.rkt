@@ -10,6 +10,7 @@
 
 (require racket/cmdline
          racket/file
+         racket/path
          racket/string
          "../src/model.rkt"
          "../src/trace-run.rkt"
