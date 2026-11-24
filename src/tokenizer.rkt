@@ -12,6 +12,8 @@
          "errors.rkt"
          "merges.rkt"
          "pretokenize.rkt"
+         "source-map.rkt"
+         "trace.rkt"
          "utf8-stream.rkt")
 
 (provide load-tokenizer
@@ -91,29 +93,109 @@
       [else
        (loop (cdr word) (cons (car word) out))])))
 
-(define (bpe-pieces token ranks cache)
+;; info is #f on the fast path. A box receives
+;; (hasheq 'cached? boolean 'merges (or list? 'null) 'pieces list?).
+(define (bpe-pieces token ranks cache [info #f])
   (define cached (hash-ref cache token #f))
   (cond
-    [cached cached]
+    [cached
+     (when info
+       (set-box! info (hasheq 'cached? #t 'merges 'null 'pieces cached)))
+     cached]
     [else
      (define word
        (for/list ([c (in-string token)])
          (string c)))
      (cond
-       [(or (null? word) (null? (cdr word))) word]
-       [else
+       [(or (null? word) (null? (cdr word)))
+        (when info
+          (set-box! info (hasheq 'cached? #f 'merges '() 'pieces word)))
+        word]
+       [(eq? info #f)
         (define final
-          (let loop ([word word])
+          (stage bpe-merge bpe-pieces
+            (let loop ([word word])
+              (define pair (lowest-pair word ranks))
+              (cond
+                [(not pair) word]
+                [else
+                 (define merged (apply-merge word (car pair) (cdr pair)))
+                 (if (null? (cdr merged))
+                     merged
+                     (loop merged))]))))
+        (hash-set! cache token final)
+        final]
+       [else
+        (define-values (final steps)
+          (let loop ([word word] [steps '()])
             (define pair (lowest-pair word ranks))
             (cond
-              [(not pair) word]
+              [(not pair) (values word (reverse steps))]
               [else
+               (define rank (hash-ref ranks pair))
                (define merged (apply-merge word (car pair) (cdr pair)))
+               (define step
+                 (hasheq 'pair (list (car pair) (cdr pair))
+                         'rank rank
+                         'merged (string-append (car pair) (cdr pair))
+                         'pieces merged))
                (if (null? (cdr merged))
-                   merged
-                   (loop merged))])))
+                   (values merged (reverse (cons step steps)))
+                   (loop merged (cons step steps)))])))
         (hash-set! cache token final)
+        (set-box! info (hasheq 'cached? #f 'merges steps 'pieces final))
         final])]))
+
+(define (encode-plain-fast tok text)
+  (define ranks (tokenizer-ranks tok))
+  (define cache (tokenizer-cache tok))
+  (let loop ([pieces (gpt2-pretokenize text)] [out '()])
+    (cond
+      [(null? pieces) (reverse out)]
+      [else
+       (define symbols (bpe-pieces (byte-encode (car pieces)) ranks cache))
+       (loop (cdr pieces)
+             (let add ([symbols symbols] [out out])
+               (if (null? symbols)
+                   out
+                   (add (cdr symbols)
+                        (cons (lookup-id tok (car symbols)) out)))))])))
+
+(define (record-bpe-chunk! obs tok raw)
+  (define ranks (tokenizer-ranks tok))
+  (define cache (tokenizer-cache tok))
+  (define encoded (byte-encode raw))
+  (define info (box #f))
+  (define symbols (bpe-pieces encoded ranks cache info))
+  (define got (unbox info))
+  (define ids
+    (for/list ([sym (in-list symbols)])
+      (lookup-id tok sym)))
+  (define strings
+    (for/list ([id (in-list ids)])
+      (decode tok (list id))))
+  (trace-bpe-chunk!
+   obs
+   (hasheq 'text raw
+           'byteEncoded encoded
+           'cached (hash-ref got 'cached?)
+           'merges (hash-ref got 'merges)
+           'pieces (hash-ref got 'pieces)
+           'tokenIds ids
+           'tokenStrings strings))
+  ids)
+
+(define (encode-plain-traced tok text obs)
+  (define t0 (current-inexact-monotonic-milliseconds))
+  (define ids
+    (let loop ([pieces (gpt2-pretokenize text)] [out '()])
+      (if (null? pieces)
+          (reverse out)
+          (loop (cdr pieces)
+                (append (reverse (record-bpe-chunk! obs tok (car pieces))) out)))))
+  (trace-span! obs 'bpe-merge #f 'bpe
+               (- (current-inexact-monotonic-milliseconds) t0))
+  ids)
 
 (define (byte-encode text)
   (define bs (string->bytes/utf-8 text))
@@ -131,19 +213,10 @@
                                      "token" piece))))
 
 (define (encode-plain tok text)
-  (define ranks (tokenizer-ranks tok))
-  (define cache (tokenizer-cache tok))
-  (let loop ([pieces (gpt2-pretokenize text)] [out '()])
-    (cond
-      [(null? pieces) (reverse out)]
-      [else
-       (define symbols (bpe-pieces (byte-encode (car pieces)) ranks cache))
-       (loop (cdr pieces)
-             (let add ([symbols symbols] [out out])
-               (if (null? symbols)
-                   out
-                   (add (cdr symbols)
-                        (cons (lookup-id tok (car symbols)) out)))))])))
+  (define obs (current-trace-observer))
+  (if (eq? obs #f)
+      (encode-plain-fast tok text)
+      (encode-plain-traced tok text obs)))
 
 (define (find-endoftext text start)
   (define needle endoftext-token)
