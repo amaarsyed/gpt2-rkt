@@ -1,0 +1,34 @@
+{
+  "name": "gpt2-rkt-writeup",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "The scroll-led write-up and execution visualizer for gpt2-rkt.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "katex": "^0.19.1",
+    "lenis": "^1.3.26",
+    "lucide-react": "^1.80.0",
+    "radix-ui": "^1.8.1",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "tailwind-merge": "^3.7.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.5",
+    "@types/node": "^22.15.0",
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "@vitejs/plugin-react": "^4.4.1",
+    "tailwindcss": "^4.3.5",
+    "tw-animate-css": "^1.4.0",
+    "typescript": "~5.8.3",
+    "vite": "^6.3.5"
+  }
+}
