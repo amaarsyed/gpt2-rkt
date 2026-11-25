@@ -7,6 +7,7 @@
          racket/future
          racket/unsafe/ops
          "nn.rkt"
+         "source-map.rkt"
          "tensor.rkt")
 
 (provide qkv-split
@@ -26,7 +27,8 @@
                            "heads" heads "capacity" capacity))
   (attention-work heads capacity (make-flvector (* heads capacity) 0.0)))
 
-(define (fill-head! out q k v scores h nq nk q-stride stride dh capacity scale)
+;; Positional fast path. attend calls this directly when #:weights-out is #f.
+(define (fill-head-fast! out q k v scores h nq nk q-stride stride dh capacity scale)
   (define col (unsafe-fx* h dh))
   (define score-base (unsafe-fx* h capacity))
   (let loop-i ([i 0])
@@ -73,6 +75,66 @@
             (loop-j (unsafe-fx+ j 1)))))
       (loop-i (unsafe-fx+ i 1)))))
 
+;; Same arithmetic as fill-head-fast!. Each normalized causal weight is
+;; copied into slots[h] before the score row is reused for the next query.
+(define (fill-head-record! out q k v scores h nq nk q-stride stride dh capacity scale slots)
+  (define col (unsafe-fx* h dh))
+  (define score-base (unsafe-fx* h capacity))
+  (define rows '())
+  (let loop-i ([i 0])
+    (unless (unsafe-fx= i nq)
+      (define qbase (unsafe-fx+ (unsafe-fx* i q-stride) col))
+      (define outbase (unsafe-fx+ (unsafe-fx* i stride) col))
+      (define visible (unsafe-fx+ (unsafe-fx- nk nq) (unsafe-fx+ i 1)))
+      (define maxv
+        (let loop-j ([j 0] [maxv -inf.0])
+          (if (unsafe-fx= j visible)
+              maxv
+              (let* ([kbase (unsafe-fx+ (unsafe-fx* j stride) col)]
+                     [dot (let loop-d ([d 0] [sum 0.0])
+                            (if (unsafe-fx= d dh) sum
+                                (loop-d (unsafe-fx+ d 1)
+                                        (unsafe-fl+ sum
+                                                    (unsafe-fl* (unsafe-flvector-ref q (unsafe-fx+ qbase d))
+                                                                (unsafe-flvector-ref k (unsafe-fx+ kbase d)))))))]
+                     [score (unsafe-fl* dot scale)])
+                (unsafe-flvector-set! scores (unsafe-fx+ score-base j) score)
+                (loop-j (unsafe-fx+ j 1) (flmax maxv score))))))
+      (define total
+        (let loop-j ([j 0] [sum 0.0])
+          (if (unsafe-fx= j visible) sum
+              (let* ([idx (unsafe-fx+ score-base j)]
+                     [score (unsafe-flvector-ref scores idx)]
+                     [weight (cond [(fl= maxv -inf.0) 0.0]
+                                   [(fl= maxv +inf.0) (if (fl= score +inf.0) 1.0 0.0)]
+                                   [else (flexp (unsafe-fl- score maxv))])])
+                (unsafe-flvector-set! scores idx weight)
+                (loop-j (unsafe-fx+ j 1) (unsafe-fl+ sum weight))))))
+      (define wrow (make-flvector visible 0.0))
+      (unless (fl= total 0.0)
+        (let loop-j ([j 0])
+          (unless (unsafe-fx= j visible)
+            (define weight (unsafe-fl/ (unsafe-flvector-ref scores (unsafe-fx+ score-base j)) total))
+            (unsafe-flvector-set! wrow j weight)
+            (define vbase (unsafe-fx+ (unsafe-fx* j stride) col))
+            (let loop-d ([d 0])
+              (unless (unsafe-fx= d dh)
+                (define idx (unsafe-fx+ outbase d))
+                (unsafe-flvector-set! out idx
+                                      (unsafe-fl+ (unsafe-flvector-ref out idx)
+                                                  (unsafe-fl* weight (unsafe-flvector-ref v (unsafe-fx+ vbase d)))))
+                (loop-d (unsafe-fx+ d 1))))
+            (loop-j (unsafe-fx+ j 1)))))
+      (set! rows (cons (cons (unsafe-fx+ (unsafe-fx- nk nq) i) wrow) rows))
+      (loop-i (unsafe-fx+ i 1))))
+  (vector-set! slots h (reverse rows)))
+
+(define (fill-head! out q k v scores h nq nk q-stride stride dh capacity scale
+                    #:weights-out [weights-out #f])
+  (if (eq? weights-out #f)
+      (fill-head-fast! out q k v scores h nq nk q-stride stride dh capacity scale)
+      (fill-head-record! out q k v scores h nq nk q-stride stride dh capacity scale weights-out)))
+
 (define (attention-scale d-head)
   (unless (exact-positive-integer? d-head)
     (raise-argument-error 'attention-scale "exact-positive-integer?" d-head))
@@ -115,7 +177,8 @@
   (apply-causal-mask! (matmul-transposed-b q k) scale))
 
 (define (attend q k v n-head #:kv-rows [kv-rows #f] #:workspace [workspace #f]
-                #:query-width [query-width #f])
+                #:query-width [query-width #f]
+                #:weights-out [weights-out #f])
   (unless (exact-positive-integer? n-head)
     (raise-argument-error 'attend "exact-positive-integer?" n-head))
   (define-values (nq q-stride) (matrix-shape 'attend q))
@@ -159,10 +222,19 @@
                (>= (attention-work-capacity work) used))
     (raise-arguments-error 'attend "workspace does not fit the heads and filled prefix"
                            "heads" n-head "rows" used))
+  (unless (or (eq? weights-out #f)
+              (and (vector? weights-out) (>= (vector-length weights-out) n-head)))
+    (raise-argument-error 'attend "(or/c #f (vectorof sufficient length))" weights-out))
   (define merged (make-tensor (list nq d) (make-flvector (* nq d) 0.0)))
   (define (head h)
-    (fill-head! (tensor-data merged) (tensor-data q) (tensor-data k) (tensor-data v)
-                (attention-work-scores work) h nq used q-stride d dh (attention-work-capacity work) scale))
+    (if (eq? weights-out #f)
+        (stage attend fill-head!
+          (fill-head-fast! (tensor-data merged) (tensor-data q) (tensor-data k) (tensor-data v)
+                           (attention-work-scores work) h nq used q-stride d dh
+                           (attention-work-capacity work) scale))
+        (fill-head-record! (tensor-data merged) (tensor-data q) (tensor-data k) (tensor-data v)
+                           (attention-work-scores work) h nq used q-stride d dh
+                           (attention-work-capacity work) scale weights-out)))
   ;; A decode query stays serial. Prefill gives each head its own future.
   (cond
     [(and (> (processor-count) 1) (> (* nq used dh) 100000))

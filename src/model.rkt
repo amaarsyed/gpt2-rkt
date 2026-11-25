@@ -14,8 +14,10 @@
          "model-assets.rkt"
          "nn.rkt"
          "safetensors.rkt"
+         "source-map.rkt"
          "tensor.rkt"
-         "tokenizer.rkt")
+         "tokenizer.rkt"
+         "trace.rkt")
 
 (provide load-model
          load-report?
@@ -27,6 +29,8 @@
          gpt2-model-vocab-size
          gpt2-model-n-positions
          gpt2-model-n-embd
+         gpt2-model-n-head
+         gpt2-model-n-layer
          gpt2-model-eos-id
          gpt2-model-tokenizer
          next-token-logits
@@ -80,6 +84,9 @@
             (if (null? blocks) 1 (block-params-n-head (car blocks)))
             eos-id
             wte wpe blocks ln-gain ln-bias tokenizer))
+
+(define (gpt2-model-n-layer model)
+  (length (gpt2-model-blocks model)))
 
 (define (empty-kv-cache model #:capacity [capacity #f])
   (define npos (gpt2-model-n-positions model))
@@ -144,41 +151,79 @@
   (define n (length ids))
   (check-context 'model-forward (+ start n) (context-limit model))
   (set-box! live #f)
-  (define embed (input-embed (gpt2-model-wte model)
-                             (gpt2-model-wpe model)
-                             ids
-                             #:start start))
-  (define-values (y layers outs)
-    (for/fold ([hidden embed] [acc '()] [outs '()])
-              ([params (in-list (gpt2-model-blocks model))]
-               [past (in-list (kv-cache-layers cache))])
-      (define-values (out k v)
-        (gpt2-block-cached hidden
-                           params
-                           (layer-cache-k past)
-                           (layer-cache-v past)
-                           #:filled start
-                           #:workspace (kv-cache-work cache)))
-      (values out
-              (cons (layer-cache k v) acc)
-              (if trace (cons out outs) outs))))
-  (define hidden (layer-norm y (gpt2-model-ln-gain model) (gpt2-model-ln-bias model)))
-  (define scored
-    (if last-only
-        (tensor-row hidden (sub1 (car (tensor-dims hidden))))
-        hidden))
-  (define logits (tied-logits scored (gpt2-model-wte model)))
-  (define returned (kv-cache (reverse layers) (+ start n) (box (+ start n)) (kv-cache-work cache)))
-  (when trace
-    (set-box! trace
-              (activation-trace embed
-                                (reverse outs)
-                                hidden
-                                (if last-only
-                                    logits
-                                    (tied-logits (tensor-row hidden (sub1 (car (tensor-dims hidden))))
-                                                 (gpt2-model-wte model))))))
-  (values logits returned))
+  (define obs (current-trace-observer))
+  (define phase (if (zero? start) 'prefill 'decode))
+  (with-trace-phase obs phase ids
+    (define embed (input-embed (gpt2-model-wte model)
+                               (gpt2-model-wpe model)
+                               ids
+                               #:start start))
+    (define-values (y layers outs)
+      (for/fold ([hidden embed] [acc '()] [outs '()])
+                ([params (in-list (gpt2-model-blocks model))]
+                 [past (in-list (kv-cache-layers cache))]
+                 [li (in-naturals)])
+        (define-values (out k v)
+          (if (eq? obs #f)
+              (gpt2-block-cached hidden
+                                 params
+                                 (layer-cache-k past)
+                                 (layer-cache-v past)
+                                 #:filled start
+                                 #:workspace (kv-cache-work cache))
+              (parameterize ([current-trace-layer li])
+                (gpt2-block-cached hidden
+                                   params
+                                   (layer-cache-k past)
+                                   (layer-cache-v past)
+                                   #:filled start
+                                   #:workspace (kv-cache-work cache)))))
+        (values out
+                (cons (layer-cache k v) acc)
+                (if trace (cons out outs) outs))))
+    (define hidden
+      (if-trace obs 'final-ln
+        (stage final-ln layer-norm
+          (layer-norm y (gpt2-model-ln-gain model) (gpt2-model-ln-bias model)))
+        (lambda (h t0) (trace-activation! obs 'final-ln h t0))))
+    (define scored
+      (if last-only
+          (tensor-row hidden (sub1 (car (tensor-dims hidden))))
+          hidden))
+    (define logits
+      (if-trace obs 'tied-logits
+        (stage tied-logits tied-logits
+          (tied-logits scored (gpt2-model-wte model)))
+        (lambda (z t0) (trace-activation! obs 'tied-logits z t0))))
+    (define returned (kv-cache (reverse layers) (+ start n) (box (+ start n)) (kv-cache-work cache)))
+    (when trace
+      (set-box! trace
+                (activation-trace embed
+                                  (reverse outs)
+                                  hidden
+                                  (if last-only
+                                      logits
+                                      (tied-logits (tensor-row hidden (sub1 (car (tensor-dims hidden))))
+                                                   (gpt2-model-wte model))))))
+    (values logits returned)))
+
+(define (top-entries logits k tok)
+  (define n (flvector-length logits))
+  (define probs
+    (tensor-data
+     (softmax (make-tensor (list n) (flvector-copy logits)))))
+  (define order
+    (sort (for/list ([i (in-range n)]) i)
+          (lambda (i j)
+            (define a (flvector-ref logits i))
+            (define b (flvector-ref logits j))
+            (or (fl> a b)
+                (and (fl= a b) (< i j))))))
+  (for/list ([i (in-list (take order (min k n)))])
+    (hasheq 'id i
+            'logit (flvector-ref logits i)
+            'prob (flvector-ref probs i)
+            'text (if tok (decode tok (list i)) ""))))
 
 (define (last-row logits)
   (define dims (tensor-dims logits))
@@ -274,7 +319,9 @@
 
 (define (choose-token logits temperature top-k)
   (cond
-    [(not temperature) (argmax logits)]
+    [(not temperature)
+     (stage sample argmax
+       (argmax logits))]
     [else
      (define scaled (scale-logits logits temperature))
      (define masked (if top-k (mask-top-k scaled top-k) scaled))
@@ -322,19 +369,59 @@
       (when (and out (not (string=? piece "")))
         (display piece out)
         (flush-output out))))
+  (define obs (current-trace-observer))
+  (define tracing? (not (eq? obs #f)))
+  (define (clock) (current-inexact-monotonic-milliseconds))
+  (define (cumulative) (apply string-append (reverse pieces)))
+  (define (note-choice! row id choice-ms)
+    (trace-logits! obs (top-entries row 15 tok))
+    (trace-sample! obs
+                   #:decoding (if temperature "sample" "greedy")
+                   #:id id
+                   #:text (if (and tok (not (= id eos))) (decode tok (list id)) "")
+                   #:cumulative (cumulative)
+                   #:ms choice-ms))
+  (define t-run (and tracing? (clock)))
+  ;; One spare row so a traced run can score the last chosen token.
+  ;; The sampling forwards never read it. The fast path keeps `total`.
+  (define trace-last? (and tracing? (< total (context-limit model))))
   (define-values (first-logits cache)
-    (model-forward model ids (empty-kv-cache model #:capacity total) #:last-only #t))
-  (define first (choose (last-row first-logits)))
+    (model-forward model ids
+                   (empty-kv-cache model #:capacity (if trace-last? (add1 total) total))
+                   #:last-only #t))
+  (define first-row (last-row first-logits))
+  (define t-choice (and tracing? (clock)))
+  (define first (choose first-row))
+  (define first-choice-ms (and tracing? (- (clock) t-choice)))
   (emit-id first)
+  (when tracing? (note-choice! first-row first first-choice-ms))
+  (define t-decode (and tracing? (clock)))
+  ;; The cache that can accept another token. The last chosen id is not
+  ;; fed by the sampling loop; a traced run scores it so that token's
+  ;; causal row is recorded. That distribution is not sampled.
+  (define last-cache cache)
   (define new
     (let loop ([cache cache] [chosen first] [acc (list first)] [left (sub1 max-new)])
       (if (or (zero? left) (and stop-at-eos? (= chosen eos)))
-          (reverse acc)
+          (begin
+            (set! last-cache cache)
+            (reverse acc))
           (let-values ([(logits cache)
                         (model-forward model (list chosen) cache #:last-only #t)])
-            (define nxt (choose (last-row logits)))
+            (define row (last-row logits))
+            (define t0 (and tracing? (clock)))
+            (define nxt (choose row))
+            (define choice-ms (and tracing? (- (clock) t0)))
             (emit-id nxt)
+            (when tracing? (note-choice! row nxt choice-ms))
             (loop cache nxt (cons nxt acc) (sub1 left))))))
+  (when (and trace-last? (pair? new))
+    (model-forward model (list (last new)) last-cache #:last-only #t))
+  (when tracing?
+    (define t-end (clock))
+    (set-execution-trace-prefill-ms! obs (- t-decode t-run))
+    (set-execution-trace-decode-ms! obs (- t-end t-decode))
+    (set-execution-trace-total-ms! obs (- t-end t-run)))
   (define tail (if dec (token-decoder-finish dec) ""))
   (when (and out (not (string=? tail "")))
     (display tail out)

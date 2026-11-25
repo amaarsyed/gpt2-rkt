@@ -1,0 +1,1729 @@
+:root {
+  color-scheme: light;
+  --name-font: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+html,
+body,
+#root {
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+body {
+  margin: 0;
+  background: #faf9f7;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+a {
+  color: var(--fg, #ededed);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, var(--fg, #ededed) 30%, transparent);
+  transition:
+    color 0.18s,
+    text-decoration-color 0.18s;
+}
+
+a:hover {
+  color: var(--muted, #9a9a96);
+  text-decoration-color: var(--muted, #9a9a96);
+}
+
+::selection {
+  background: var(--accent, #f5c400);
+  color: #17140a;
+}
+
+@keyframes nameSwap {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+    filter: blur(3px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+.lang-swap {
+  animation: nameSwap 0.55s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lang-swap {
+    animation: none;
+  }
+}
+
+.name-serif {
+  font-family: var(--name-font);
+  font-optical-sizing: auto;
+  text-transform: lowercase;
+}
+
+/* drawably underline — scribble draws in once on boot */
+.drawn-underline.drawably-host {
+  font-family: inherit;
+  isolation: isolate;
+  max-width: 100%;
+}
+
+.drawn-underline .drawn-underline-svg {
+  z-index: 0;
+  overflow: visible;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.drawn-underline.is-active .drawn-underline-svg {
+  opacity: 1;
+  transition: opacity 0.05s ease;
+}
+
+.drawn-underline > :not(svg) {
+  position: relative;
+  z-index: 1;
+}
+
+.drawn-underline .drawn-scribble {
+  fill: none;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+
+.drawn-underline.is-active .drawn-scribble {
+  animation: drawn-scribble-in 1.35s cubic-bezier(0.33, 0, 0.2, 1) forwards;
+}
+
+.drawn-bracket .drawn-scribble {
+  fill: none;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+
+.drawn-bracket.is-active .drawn-scribble {
+  animation: drawn-bracket-in 1.25s cubic-bezier(0.45, 0.1, 0.3, 1) forwards;
+}
+
+@keyframes drawn-scribble-in {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes drawn-bracket-in {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drawn-underline.is-active .drawn-scribble,
+  .drawn-bracket.is-active .drawn-scribble {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}
+
+@font-face {
+  font-family: Lastoria;
+  src: url('/LastoriaBoldRegular.otf') format('opentype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* cmrg-style brace + side scribble — sits in the margin, text-2xl / w-48 */
+.drawn-bracket {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+
+.drawn-bracket-svg {
+  position: absolute;
+  right: -1.35rem;
+  top: 0;
+  height: 100%;
+  width: 16px;
+  overflow: visible;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.drawn-bracket.is-active .drawn-bracket-svg {
+  opacity: 1;
+}
+
+.drawn-bracket-stroke {
+  fill: none;
+  stroke: var(--drawably-stroke, #111);
+  stroke-width: var(--drawably-width, 1.7);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.drawn-bracket-note {
+  position: absolute;
+  top: 50%;
+  right: -2.5rem;
+  z-index: 2;
+  width: 12rem;
+  margin: 0;
+  color: var(--muted, #4b5563);
+  font-family: Caveat, 'Segoe Print', 'Bradley Hand', cursive;
+  font-size: 1.75rem;
+  font-weight: 600;
+  line-height: 2rem;
+  letter-spacing: -0.02em;
+  user-select: none;
+  pointer-events: none;
+  transform: translate(100%, -50%);
+}
+
+.drawn-note-word {
+  display: inline-block;
+  white-space: pre;
+}
+
+.drawn-note-char {
+  display: inline-block;
+  white-space: pre;
+  opacity: 0;
+}
+
+.drawn-bracket.is-active .drawn-note-char {
+  animation: drawn-char-in 0.01s linear forwards;
+  animation-delay: calc(1.35s + var(--c) * 45ms);
+}
+
+@keyframes drawn-char-in {
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drawn-note-char {
+    animation: none !important;
+    opacity: 1;
+  }
+}
+
+@media (max-width: 720px) {
+  .drawn-bracket-svg,
+  .drawn-bracket-note {
+    display: none;
+  }
+
+  .site-footer {
+    margin-top: 80px;
+    padding-top: 22px;
+    font-size: 17px;
+  }
+}
+
+.content-shell {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+  overflow: visible;
+  padding-top: calc(116px + env(safe-area-inset-top, 0px));
+  padding-right: calc(clamp(16px, 4.5vw, 28px) + env(safe-area-inset-right, 0px));
+  padding-bottom: calc(clamp(64px, 12vh, 110px) + env(safe-area-inset-bottom, 0px));
+  padding-left: calc(clamp(16px, 4.5vw, 28px) + env(safe-area-inset-left, 0px));
+}
+
+.content-shell,
+.desk-shell {
+  min-height: 100vh;
+  min-height: 100svh;
+}
+
+.desk-shell {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding-top: calc(clamp(48px, 8vh, 96px) + env(safe-area-inset-top, 0px));
+  padding-bottom: clamp(32px, 6vh, 72px);
+}
+
+.desk-shell .sticker-board-section {
+  margin-top: 0;
+}
+
+.footer-shell {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+  padding-right: calc(clamp(16px, 4.5vw, 28px) + env(safe-area-inset-right, 0px));
+  padding-bottom: calc(clamp(32px, 6vh, 64px) + env(safe-area-inset-bottom, 0px));
+  padding-left: calc(clamp(16px, 4.5vw, 28px) + env(safe-area-inset-left, 0px));
+}
+
+.footer-shell .site-footer {
+  margin-top: 0;
+}
+
+.content-shell::before {
+  content: '';
+  position: absolute;
+  inset: -48px -72px;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 70% 62% at 40% 28%,
+    color-mix(in srgb, var(--bg) 96%, transparent) 0%,
+    color-mix(in srgb, var(--bg) 84%, transparent) 42%,
+    color-mix(in srgb, var(--bg) 0%, transparent) 78%
+  );
+}
+
+/* Bio: words light to white as the cursor reads through */
+.reading-illuminate {
+  color: var(--muted);
+  max-width: min(44ch, 100%);
+  font-size: clamp(15px, 0.35vw + 14.4px, 16px);
+  line-height: 1.55;
+  letter-spacing: -0.005em;
+  overflow-wrap: break-word;
+  overflow: visible;
+}
+
+.reading-illuminate a {
+  color: inherit;
+}
+
+.reading-illuminate a:has(.inline-logo) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.marker-highlight {
+  --marker-fill: var(--fg);
+  --marker-ink: #fff;
+  display: inline-block;
+  position: relative;
+  z-index: 0;
+  padding: 0.05em 0.2em;
+  margin: 0 -0.04em;
+  color: inherit;
+  transition: color 0.42s ease 0.18s;
+}
+
+.site-root[data-theme='dark'] .marker-highlight {
+  --marker-fill: #fff;
+  --marker-ink: var(--bg);
+}
+
+.marker-highlight::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  left: 0;
+  right: 0;
+  top: 0.08em;
+  bottom: 0.04em;
+  border-radius: 2px;
+  background: var(--marker-fill);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.82s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.marker-highlight.is-active {
+  color: var(--marker-ink);
+}
+
+.marker-highlight.is-active::before {
+  transform: scaleX(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marker-highlight,
+  .marker-highlight::before {
+    transition: none;
+  }
+
+  .marker-highlight::before {
+    transform: scaleX(1);
+  }
+
+  .marker-highlight {
+    color: var(--marker-ink);
+  }
+}
+
+.illum-word {
+  display: inline;
+  color: inherit;
+  transition:
+    color 0.2s ease,
+    text-shadow 0.2s ease;
+}
+
+.reading-illuminate.is-tracking .illum-word.is-lit {
+  color: var(--fg);
+  text-shadow: 0 0 18px color-mix(in srgb, var(--fg) 16%, transparent);
+}
+
+@font-face {
+  font-family: 'Brittany Signature';
+  src: url('/fonts/BrittanySignature.ttf') format('truetype');
+  font-display: swap;
+}
+
+.bio-photo {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+
+.bio-photo-bracket {
+  max-width: 100%;
+  font-size: clamp(15px, 0.35vw + 14.4px, 16px);
+  margin: 24px 0 0;
+}
+
+/* Looping video that swaps to a photo behind a pixel wipe on hover (PixelatedReveal). */
+.pixel-reveal {
+  position: relative;
+  margin: 0;
+  overflow: hidden;
+  border-radius: 0;
+  background: #111;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pixel-reveal[role='button'] {
+  cursor: pointer;
+}
+
+.pixel-reveal[role='button']:focus-visible {
+  outline: 2px solid var(--fg);
+  outline-offset: 3px;
+}
+
+.pixel-reveal-layer {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  user-select: none;
+}
+
+.pixel-reveal-photo {
+  opacity: 0;
+}
+
+.pixel-reveal-photo.is-on {
+  opacity: 1;
+}
+
+.pixel-reveal-pixels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.pixel-reveal-pixel {
+  position: absolute;
+  will-change: opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .illum-word {
+    transition: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+}
+
+/* Layout shell — fluid across phones, tablets, desktops */
+.site-root {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--fg);
+  font-family:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  /* No fade: the body, the content wash and the header strip switch
+     instantly, so fading this alone shows them as boxes mid-toggle. */
+}
+
+.site-header {
+  position: fixed;
+  top: calc(12px + env(safe-area-inset-top, 0px));
+  left: 50%;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 40px;
+  row-gap: 2px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 620px;
+  padding-left: calc(clamp(16px, 4.5vw, 28px) + env(safe-area-inset-left, 0px));
+  /* links wrap under the name on phones */
+  padding-right: calc(clamp(16px, 4.5vw, 28px) + env(safe-area-inset-right, 0px));
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.site-header::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  top: -40px;
+  bottom: -10px;
+  left: 50%;
+  width: 100vw;
+  transform: translateX(-50%);
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+
+.site-header.is-scrolled::before {
+  opacity: 1;
+}
+
+/* On a dark page, bright photos blurred through a see-through strip read as
+   a pale band along the top, so the strip is solid here. */
+.site-root[data-theme='dark'] .site-header::before {
+  background: var(--bg);
+}
+
+.site-id {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  min-width: 0;
+}
+
+.site-header .name-wrap,
+.site-header .lang-slot {
+  pointer-events: auto;
+}
+
+.site-header .lang-slot {
+  width: 96px;
+}
+
+.site-nav {
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
+  font-family: var(--name-font);
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+
+.site-nav a {
+  pointer-events: auto;
+  padding: 6px 0;
+  color: var(--fg);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.site-nav a:hover,
+.site-nav a:focus-visible {
+  color: var(--muted);
+}
+
+.site-nav a:focus-visible {
+  outline: 2px solid var(--fg);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.theme-toggle {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  padding: 6px 0;
+  border: 0;
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.theme-toggle svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.theme-toggle:hover,
+.theme-toggle:focus-visible {
+  color: var(--muted);
+}
+
+.theme-toggle:focus-visible {
+  outline: 2px solid var(--fg);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.name-wrap {
+  position: relative;
+  display: inline-block;
+  z-index: 3;
+}
+
+.name-wrap:focus-visible,
+.lang-slot:focus-visible {
+  outline: 2px solid var(--fg);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+.name-serif {
+  margin: 0;
+  color: var(--fg);
+  font-weight: 400;
+  font-size: clamp(28px, 7vw, 34px);
+  letter-spacing: -0.025em;
+  line-height: 1.05;
+  cursor: pointer;
+}
+
+.name-tip {
+  position: absolute;
+  left: 0;
+  top: 100%;
+  margin-top: 6px;
+  z-index: 4;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--fg);
+  background: var(--faint);
+  border: 1px solid var(--line);
+  padding: 4px 9px;
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+}
+
+.lang-slot {
+  position: relative;
+  display: inline-block;
+  z-index: 3;
+  width: min(150px, 100%);
+  max-width: 100%;
+  vertical-align: baseline;
+}
+
+.lang-swap {
+  display: inline-block;
+  font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  font-size: clamp(18px, 5vw, 22px);
+  line-height: 1.7;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: visible;
+  text-align: left;
+  cursor: help;
+  max-width: 100%;
+}
+
+.meaning-tip {
+  position: absolute;
+  left: 0;
+  top: 100%;
+  margin-top: 6px;
+  z-index: 4;
+  min-width: 168px;
+  max-width: min(220px, calc(100vw - 32px));
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 1.4;
+  letter-spacing: 0.01em;
+  color: var(--fg);
+  background: color-mix(in srgb, var(--bg) 88%, var(--faint));
+  border-left: 2px solid var(--fg);
+  padding: 7px 11px 7px 10px;
+  border-radius: 0 6px 6px 0;
+  pointer-events: none;
+}
+
+.meaning-tip-kicker {
+  display: block;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg);
+  margin-bottom: 3px;
+}
+
+.greeting-line {
+  margin: 0 0 30px;
+  font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  font-size: clamp(15px, 3.8vw, 16px);
+  line-height: 1.6;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.greeting-line strong {
+  font-weight: 500;
+  font-size: 0.92em;
+  color: var(--fg);
+  text-transform: lowercase;
+}
+
+.social-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 22px;
+  margin: 22px 0 0;
+  font-size: 15px;
+  line-height: 1.4;
+  letter-spacing: -0.005em;
+  color: var(--muted);
+}
+
+.social-row a {
+  display: inline;
+  color: var(--fg);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.social-row a:hover,
+.social-row a:focus-visible {
+  color: var(--muted);
+}
+
+.social-row a:focus-visible {
+  outline: 2px solid var(--fg);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.social-bracket {
+  color: var(--muted);
+}
+
+.social-email {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3em;
+}
+
+.email-copy {
+  position: relative;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  letter-spacing: inherit;
+  cursor: copy;
+  transition: color 0.15s ease;
+}
+
+.email-copy:hover,
+.email-copy:focus-visible {
+  color: var(--muted);
+}
+
+.email-copy:focus-visible {
+  outline: 2px solid var(--fg);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* Small tip over the address: "click to copy", then "copied to clipboard". */
+.email-copy::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--fg);
+  color: var(--bg);
+  font-size: 11px;
+  line-height: 1.3;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(3px);
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.email-copy:hover::after,
+.email-copy:focus-visible::after,
+.email-copy.is-copied::after {
+  opacity: 1;
+  transform: none;
+}
+
+.social-row a.email-send {
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-left: 6px;
+  border-radius: 6px;
+  color: var(--muted);
+}
+
+.social-row a.email-send:hover,
+.social-row a.email-send:focus-visible {
+  color: var(--fg);
+  background: color-mix(in srgb, var(--fg) 8%, transparent);
+}
+
+.email-send svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .email-copy::after {
+    transition: none;
+  }
+}
+
+.inline-logo {
+  display: inline-block;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  vertical-align: -6px;
+  object-fit: contain;
+  background: transparent;
+}
+
+.inline-logo.no-square {
+  border-radius: 0;
+}
+
+.site-section {
+  margin-top: 56px;
+}
+
+.site-kicker {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.build-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.build-item {
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.build-title {
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.build-with {
+  color: var(--muted);
+}
+
+.build-with a {
+  color: var(--muted);
+}
+
+.site-footer {
+  position: relative;
+  z-index: 1;
+  margin-top: 120px;
+  padding: 28px 0 4px;
+  border-top: 1px solid color-mix(in srgb, var(--fg) 18%, transparent);
+  font-size: 18px;
+  line-height: 1.4;
+  color: var(--fg);
+}
+
+.site-footer-copy {
+  margin: 0;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.site-footer-soon {
+  margin: 10px 0 0;
+  font-size: 16px;
+  color: color-mix(in srgb, var(--fg) 78%, var(--muted));
+}
+
+#intro,
+#greeting,
+#bio-school,
+#connect,
+#builds,
+#writing,
+#desk,
+#colophon {
+  scroll-margin-top: 24px;
+}
+
+/* A contained, tactile desk at the end of the page. */
+.sticker-board-section {
+  position: relative;
+  isolation: isolate;
+  width: min(980px, calc(100vw - 20px));
+  margin-top: clamp(108px, 16vw, 156px);
+  margin-left: 50%;
+  transform: translateX(-50%);
+}
+
+.sticker-board-heading {
+  position: relative;
+  z-index: 1;
+  width: min(620px, calc(100vw - 32px));
+  margin: 0 auto 22px;
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.sticker-board-heading p,
+.sticker-board-heading h2 {
+  margin: 0;
+  font-weight: 400;
+}
+
+.sticker-board-heading p {
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sticker-board-heading h2 {
+  font-family: var(--name-font);
+  font-size: clamp(24px, 4vw, 31px);
+  letter-spacing: -0.025em;
+}
+
+.sticker-drag-hint {
+  padding-bottom: 4px;
+  color: var(--muted);
+  font-family: 'Segoe Print', 'Bradley Hand', cursive;
+  font-size: 15px;
+  transform: rotate(-3deg);
+  white-space: nowrap;
+}
+
+.sticker-board {
+  position: relative;
+  height: 700px;
+  overflow: visible;
+  isolation: isolate;
+  background: transparent;
+  border-radius: 22px;
+}
+
+.sticker-item {
+  position: absolute;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+  cursor: grab;
+  transform-origin: center;
+  filter: drop-shadow(0 12px 13px color-mix(in srgb, #000 24%, transparent));
+}
+
+.sticker-item.sticker-item--peel {
+  filter: none;
+}
+
+.sticker-item[data-sticker='github'] .peel-sticker-lighting {
+  filter: none;
+}
+
+.sticker-item[data-sticker='globe'] .peel-sticker-image,
+.sticker-item[data-sticker='globe'] .peel-flap-image {
+  width: auto !important;
+  height: 500px !important;
+  max-width: none !important;
+  max-height: none !important;
+}
+
+.sticker-item:active {
+  cursor: grabbing;
+}
+
+.sticker-item > a,
+.sticker-item > button {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: inherit;
+  text-decoration: none;
+  cursor: inherit;
+}
+
+.sticker-item > a:focus-visible,
+.sticker-item > button:focus-visible,
+.peel-sticker:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 5px;
+  border-radius: 8px;
+}
+
+.sticker-item--flat img {
+  display: block;
+  width: 100%;
+  height: auto;
+  pointer-events: none;
+}
+
+.sticker-item--loose {
+  filter: drop-shadow(3px 16px 12px rgba(0, 0, 0, 0.4));
+}
+
+.sticker-flat-tilt {
+  cursor: inherit;
+}
+
+.sticker-found-note {
+  left: 26%;
+  top: 164px;
+  z-index: 5;
+  margin: 0;
+  padding: 0;
+  max-width: none;
+  pointer-events: auto;
+  cursor: grab;
+  color: inherit;
+  background: none;
+  font: inherit;
+  letter-spacing: normal;
+  transform: none;
+  box-shadow: none;
+}
+
+.sticker-found-note:active {
+  cursor: grabbing;
+}
+
+.sticker-found-note-tilt {
+  position: relative;
+  padding: 16px 18px 14px;
+  max-width: 268px;
+  color: #241e14;
+  background: #f4e6b8;
+  font: 20px/1.3 'Segoe Print', 'Bradley Hand', Caveat, cursive;
+  letter-spacing: 0.01em;
+  transform: rotate(-6.5deg);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.45) inset,
+    0 10px 22px rgba(0, 0, 0, 0.32);
+}
+
+.sticker-found-note-tilt::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -11px;
+  width: 54px;
+  height: 18px;
+  background: rgba(232, 210, 140, 0.88);
+  transform: translateX(-50%) rotate(3deg);
+  box-shadow: inset 0 0 0 1px rgba(90, 70, 36, 0.1);
+}
+
+@media (max-width: 720px) {
+  .sticker-board-section {
+    width: calc(100vw - 20px);
+    margin-top: 104px;
+  }
+
+  .sticker-board-heading {
+    width: calc(100% - 22px);
+    align-items: start;
+  }
+
+  .sticker-board-heading h2 { max-width: 230px; }
+  .sticker-drag-hint { padding-top: 29px; font-size: 13px; }
+
+  .sticker-board {
+    height: 790px;
+    border-radius: 22px;
+  }
+
+  .sticker-item {
+    cursor: pointer;
+    touch-action: auto;
+  }
+
+  .sticker-item[data-sticker='globe'] {
+    left: 70% !important;
+    top: 96px !important;
+  }
+  .sticker-item[data-sticker='github'] {
+    left: 64% !important;
+    top: 300px !important;
+    --sticker-width: 96px !important;
+  }
+  .sticker-item[data-sticker='globe'] .peel-sticker-image,
+  .sticker-item[data-sticker='globe'] .peel-flap-image {
+    height: 340px !important;
+  }
+  .sticker-item[data-sticker='waterloo'] {
+    left: 5% !important;
+    top: 318px !important;
+    --sticker-width: 96px !important;
+  }
+  .sticker-item[data-sticker='shoton'] {
+    left: 48% !important;
+    top: 638px !important;
+    --sticker-width: 152px !important;
+  }
+  .sticker-item[data-sticker='hello'] {
+    left: 12% !important;
+    top: 488px !important;
+    --sticker-width: 220px !important;
+  }
+  .sticker-item[data-sticker='suitcase'] {
+    left: 48% !important;
+    top: 4px !important;
+    --sticker-width: 100px !important;
+  }
+  .sticker-item[data-sticker='ilovenyc'] {
+    left: 72% !important;
+    top: 6px !important;
+    --sticker-width: 96px !important;
+  }
+  .sticker-item[data-sticker='truck'] {
+    left: 6% !important;
+    top: 8px !important;
+    --sticker-width: 132px !important;
+  }
+  .sticker-item[data-sticker='batman'] {
+    left: 74% !important;
+    top: 188px !important;
+    width: 92px !important;
+  }
+  .sticker-item[data-sticker='film'] {
+    left: 4% !important;
+    top: 620px !important;
+    --sticker-width: 108px !important;
+  }
+  .sticker-item[data-sticker='stopart'] {
+    left: 46% !important;
+    top: 430px !important;
+    --sticker-width: 128px !important;
+  }
+  .sticker-item[data-sticker='arc'] {
+    left: calc(5% + 108px) !important;
+    top: 326px !important;
+    --sticker-width: 80px !important;
+  }
+  .sticker-item[data-sticker='jack'] {
+    left: 78% !important;
+    top: 360px !important;
+    width: 78px !important;
+  }
+  .sticker-found-note {
+    left: 6%;
+    top: 158px;
+  }
+  .sticker-found-note-tilt {
+    max-width: 220px;
+    font-size: 16px;
+    padding: 13px 14px 12px;
+  }
+}
+
+@media (max-width: 380px) {
+  .sticker-board-heading { gap: 8px; }
+  .sticker-board-heading h2 { font-size: 22px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sticker-item { transition: none !important; }
+}
+
+.fill-highlight {
+  display: inline;
+  padding: 0.04em 0.16em;
+  margin: 0 -0.06em;
+  border-radius: 2px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  background-image: linear-gradient(
+    color-mix(in srgb, var(--accent, #f5c400) 92%, #fff),
+    color-mix(in srgb, var(--accent, #f5c400) 92%, #fff)
+  );
+  background-size: 0% 100%;
+  background-repeat: no-repeat;
+  background-position: left center;
+  transition:
+    background-size 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    color 0.45s ease;
+}
+
+.hover-fill-host:hover .fill-highlight {
+  background-size: 100% 100%;
+  color: #17140a;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fill-highlight {
+    transition: none;
+  }
+}
+
+@media (min-width: 640px) {
+  .site-header {
+    top: calc(26px + env(safe-area-inset-top, 0px));
+    column-gap: 44px;
+  }
+
+  .content-shell {
+    padding-top: calc(128px + env(safe-area-inset-top, 0px));
+  }
+
+  .site-nav {
+    gap: 22px;
+    font-size: 16px;
+  }
+}
+
+@media (min-width: 760px) {
+  .content-shell {
+    padding-top: calc(104px + env(safe-area-inset-top, 0px));
+  }
+}
+
+@media (min-width: 1200px) {
+  .site-header,
+  .content-shell,
+  .footer-shell {
+    max-width: 640px;
+  }
+}
+
+@media (max-width: 420px) {
+  .content-shell::before {
+    inset: -32px -24px;
+  }
+
+  .social-row a {
+    min-width: 44px;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+@media (max-height: 500px) and (orientation: landscape) {
+  .content-shell {
+    padding-top: calc(108px + env(safe-area-inset-top, 0px));
+    padding-bottom: calc(36px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .site-header {
+    top: calc(8px + env(safe-area-inset-top, 0px));
+  }
+
+  .site-section {
+    margin-top: 36px;
+  }
+
+  .site-footer {
+    margin-top: 72px;
+    padding-top: 22px;
+    font-size: 17px;
+  }
+
+  .site-footer-soon {
+    font-size: 15px;
+  }
+}
+
+@media (max-height: 500px) and (orientation: landscape) and (min-width: 760px) {
+  .content-shell {
+    padding-top: calc(80px + env(safe-area-inset-top, 0px));
+  }
+}
+
+/* ---- Reveal: content eases in on load or when scrolled to ---- */
+
+.reveal {
+  --reveal-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Hidden until the page (or a scroll) calls for it. */
+.reveal:not(.is-in) {
+  opacity: 0;
+}
+
+/* The keyframes only set the start; with `backwards` fill the element then
+   settles into its normal style, leaving no transform, filter or clip behind. */
+.reveal.is-in {
+  animation: reveal-up 0.9s var(--reveal-ease) var(--reveal-delay, 0ms) backwards;
+}
+
+.reveal-down.is-in {
+  animation-name: reveal-down;
+}
+
+.reveal-fade.is-in {
+  animation-name: reveal-fade;
+  animation-duration: 1.1s;
+}
+
+.reveal-wipe-down.is-in {
+  animation-name: reveal-wipe-down;
+  animation-duration: 1.2s;
+}
+
+.reveal-wipe-right.is-in {
+  animation-name: reveal-wipe-right;
+  animation-duration: 1.3s;
+  animation-timing-function: cubic-bezier(0.5, 0, 0.2, 1);
+}
+
+@keyframes reveal-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+@keyframes reveal-down {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes reveal-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+/* The clip reaches 24px past the box so outlines and the tilted signature are never cut. */
+@keyframes reveal-wipe-down {
+  from {
+    clip-path: inset(-24px -24px 100% -24px);
+  }
+  to {
+    clip-path: inset(-24px);
+  }
+}
+
+@keyframes reveal-wipe-right {
+  from {
+    clip-path: inset(-24px 100% -24px -24px);
+  }
+  to {
+    clip-path: inset(-24px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal:not(.is-in) {
+    opacity: 1;
+  }
+
+  .reveal.is-in {
+    animation: none;
+  }
+}
+
+
+/* Not enough room in the margin: the note sits under the photo, no brace. */
+@media (max-width: 1040px) {
+  .drawn-bracket-svg {
+    display: none;
+  }
+
+  .bio-photo-bracket .drawn-bracket-note {
+    position: static;
+    display: block;
+    width: auto;
+    max-width: 18rem;
+    margin-top: 12px;
+    transform: none;
+  }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---- Hand-drawn arrow + Tegaki-written note beside the bio photo ---- */
+.hand-note {
+  position: relative;
+}
+
+.hand-note-side {
+  position: absolute;
+  left: calc(100% + 14px);
+  top: 50%;
+  width: 11rem;
+  transform: translateY(-50%);
+  pointer-events: none;
+  user-select: none;
+}
+
+.hand-note-arrow {
+  display: block;
+  width: 64px;
+  height: 36px;
+  margin-bottom: 2px;
+  fill: none;
+  stroke: var(--muted, #4b5563);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.hand-note-arrow path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+
+.hand-note.is-drawing .hand-note-arrow path:nth-child(1) {
+  animation: hand-draw 0.75s cubic-bezier(0.45, 0.1, 0.3, 1) forwards;
+}
+
+.hand-note.is-drawing .hand-note-arrow path:nth-child(2) {
+  animation: hand-draw 0.14s ease-out 0.72s forwards;
+}
+
+.hand-note.is-drawing .hand-note-arrow path:nth-child(3) {
+  animation: hand-draw 0.14s ease-out 0.86s forwards;
+}
+
+@keyframes hand-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.hand-note-text {
+  min-height: 3.6rem;
+  line-height: 1.1;
+}
+
+@media (max-width: 1040px) {
+  .hand-note-side {
+    position: static;
+    width: auto;
+    max-width: 16rem;
+    margin: 6px 0 0 8px;
+    transform: none;
+  }
+
+  .hand-note-arrow {
+    transform: rotate(90deg) scaleY(-1);
+    transform-origin: 32px 18px;
+    margin-bottom: 18px;
+  }
+}
+
+/* ---- "scroll down" scribble under the bio photo's note ---- */
+.scroll-hint {
+  position: absolute;
+  left: calc(100% + 30px);
+  top: calc(100% - 34px);
+  width: 9rem;
+  pointer-events: none;
+  user-select: none;
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+.scroll-hint.is-gone {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.scroll-hint-text {
+  min-height: 2.2rem;
+  line-height: 1.1;
+}
+
+.scroll-hint-arrow {
+  display: block;
+  width: 34px;
+  height: 66px;
+  margin: 2px 0 0 14px;
+  fill: none;
+  stroke: var(--muted, #4b5563);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.scroll-hint-arrow path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+
+.scroll-hint.is-drawing .scroll-hint-arrow path:nth-child(1) {
+  animation: hand-draw 0.8s cubic-bezier(0.45, 0.1, 0.3, 1) forwards;
+}
+
+.scroll-hint.is-drawing .scroll-hint-arrow path:nth-child(2) {
+  animation: hand-draw 0.14s ease-out 0.78s forwards;
+}
+
+.scroll-hint.is-drawing .scroll-hint-arrow path:nth-child(3) {
+  animation: hand-draw 0.14s ease-out 0.92s forwards;
+}
+
+@media (max-width: 1040px) {
+  .scroll-hint {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scroll-hint-arrow path {
+    stroke-dashoffset: 0;
+    animation: none !important;
+  }
+  .hand-note-arrow path {
+    stroke-dashoffset: 0;
+    animation: none !important;
+  }
+}
+
+/* Dock magnification (useDockMagnify): items grow toward the cursor. */
+.dock-item,
+.site-nav .dock-item,
+.trail-nav .dock-item {
+  transform-origin: 50% 100%;
+  transition: transform 0.14s ease-out, color 0.15s ease;
+  will-change: transform;
+}
+
+/* Small "scroll down ↓" cue under the writing section. */
+.scroll-cue {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 28px;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  text-decoration: none;
+  opacity: 0.85;
+  transition: opacity 0.2s ease;
+}
+
+.scroll-cue:hover,
+.scroll-cue:focus-visible {
+  opacity: 1;
+}
+
+.scroll-cue:focus-visible {
+  outline: 2px solid var(--fg);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.scroll-cue svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  animation: scroll-cue-bob 1.6s ease-in-out infinite;
+}
+
+@keyframes scroll-cue-bob {
+  0%,
+  100% {
+    transform: translateY(-2px);
+  }
+  50% {
+    transform: translateY(3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scroll-cue svg {
+    animation: none;
+  }
+}
+
+/* ---- First-visit startup intro ---- */
+.startup-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  transition: opacity 0.65s ease;
+}
+
+.startup-intro.is-out {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.startup-intro-card {
+  position: absolute;
+  inset: 0;
+}
+
+/* While the intro plays, the page's own entrance animations wait underneath. */
+html.is-intro {
+  overflow: hidden;
+}
+
+html.is-intro .reveal.is-in {
+  animation-play-state: paused;
+}
+
+/* Hand-written "click me" note under the Shot on iPhone sticker, with the
+   arrow curling up toward it. */
+.click-hint {
+  position: absolute;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: flex-start;
+  pointer-events: none;
+  user-select: none;
+}
+
+.click-hint--shoton {
+  /* Sticker sits at left: 74%, top: 512px (height about 57px). */
+  left: calc(74% + 6px);
+  top: 590px;
+  transform: rotate(-3deg);
+}
+
+.click-hint-text {
+  min-height: 2.2rem;
+  line-height: 1.1;
+  text-align: left;
+}
+
+.click-hint-arrow {
+  display: block;
+  width: 64px;
+  height: 30px;
+  margin: 0 0 -4px 36px;
+  transform: rotate(-55deg);
+  fill: none;
+  stroke: var(--muted, #4b5563);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.click-hint-arrow path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+
+.click-hint.is-drawing .click-hint-arrow path:nth-child(1) {
+  animation: hand-draw 0.7s cubic-bezier(0.45, 0.1, 0.3, 1) forwards;
+}
+
+.click-hint.is-drawing .click-hint-arrow path:nth-child(2) {
+  animation: hand-draw 0.14s ease-out 0.68s forwards;
+}
+
+.click-hint.is-drawing .click-hint-arrow path:nth-child(3) {
+  animation: hand-draw 0.14s ease-out 0.8s forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .click-hint-arrow path {
+    stroke-dashoffset: 0;
+    animation: none !important;
+  }
+}
+
+@media (max-width: 720px) {
+  /* Shot on iPhone moves to left: 48%, top: 638px on small screens. */
+  .click-hint--shoton {
+    left: 44%;
+    top: 700px;
+  }
+}
