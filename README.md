@@ -92,7 +92,7 @@ It prints the new text, not the prompt. The continuation shown at the top is the
 ## How it works
 
 ```mermaid
-flowchart LR
+flowchart TB
     P(["Once upon a time"]) --> T["tokenizer.rkt<br/>byte-level BPE"]
     T --> E["embed.rkt<br/>token + position"]
     E --> B
