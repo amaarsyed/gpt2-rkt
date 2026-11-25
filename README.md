@@ -3,24 +3,6 @@
   <img alt="GPT-2 in Racket λ: 124M parameters, pure Racket, no BLAS, no FFI" src="docs/assets/banner-light.svg" width="100%">
 </picture>
 
-<p align="center">
-  <a href="https://gpt2-rkt.vercel.app"><b>Read the write-up ↗</b></a>
-  &nbsp;·&nbsp;
-  <a href="docs/ARCHITECTURE.md">Architecture</a>
-  &nbsp;·&nbsp;
-  <a href="docs/BENCHMARKS.md">Benchmarks</a>
-  &nbsp;·&nbsp;
-  <a href="CHANGELOG.md">Changelog</a>
-</p>
-
-<p align="center">
-  <img alt="Racket CS 9.3" src="https://img.shields.io/badge/Racket_CS-9.3-9f1d20?style=flat-square">
-  <img alt="Pure Racket engine" src="https://img.shields.io/badge/engine-pure_Racket-1c1b19?style=flat-square">
-  <img alt="No BLAS, no FFI" src="https://img.shields.io/badge/BLAS%20%2F%20FFI-none-1c1b19?style=flat-square">
-  <img alt="34 tokens per second on an Apple M5 Pro" src="https://img.shields.io/badge/M5_Pro-34_tok%2Fs-f5c400?style=flat-square">
-  <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-1c1b19?style=flat-square">
-</p>
-
 ---
 
 GPT-2 (124M) is small enough to read and large enough to talk. This repository is that model in Racket: the byte-level tokenizer, the safetensors loader, the transformer, and the sampler.
