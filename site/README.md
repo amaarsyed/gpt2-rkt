@@ -1,5 +1,7 @@
 # GPT-2 in Racket: the write-up
 
+Live at **https://gpt2-rkt.vercel.app**.
+
 A scroll-led write-up of how gpt2-rkt runs one forward pass. The text sits on the left and a pinned execution visualizer on the right. The visualizer replays a trace recorded from this engine: `public/traces/once-upon-a-time-16.trace.json`, exported with `tools/export-trace.rkt`.
 
 ```sh
