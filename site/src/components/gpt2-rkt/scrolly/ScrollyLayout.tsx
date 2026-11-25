@@ -126,9 +126,14 @@ export function ScrollyLayout({ theme, children }: { theme: string; children: Re
   useEffect(() => {
     if (!total) return;
     let frame = 0;
+    // The page's scrollable height only changes on resize or reflow, so read it then,
+    // not on every scroll frame (reading scrollHeight can force a layout).
+    let room = document.documentElement.scrollHeight - window.innerHeight;
+    const remeasure = () => { room = document.documentElement.scrollHeight - window.innerHeight; };
+    const sizes = new ResizeObserver(() => { remeasure(); onScroll(); });
+    sizes.observe(document.body);
     const measure = () => {
       frame = 0;
-      const room = document.documentElement.scrollHeight - window.innerHeight;
       const progress = room > 0 ? Math.min(1, window.scrollY / (room * 0.94)) : 1;
       setRevealCount(Math.round(progress * total));
     };
@@ -139,6 +144,7 @@ export function ScrollyLayout({ theme, children }: { theme: string; children: Re
     return () => {
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', onScroll);
+      sizes.disconnect();
       if (frame) window.cancelAnimationFrame(frame);
     };
   }, [total]);

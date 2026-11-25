@@ -47,9 +47,9 @@
   max-width: var(--wu-column);
   margin: 0 auto;
   padding: calc(14px + env(safe-area-inset-top, 0px)) var(--wu-gutter) 10px;
-  background: color-mix(in srgb, var(--bg) 82%, transparent);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  /* Solid, not a backdrop blur: a live blur behind a sticky bar is recomposited on every
+     scroll frame, which is what makes scrolling stutter on weaker GPUs. */
+  background: var(--bg);
 }
 
 .wu-back {
@@ -684,4 +684,11 @@
     justify-content: center;
     margin-top: 14px;
   }
+}
+
+/* Jumps from the contents rail and in-page links glide; plain scrolling stays native. */
+html { scroll-behavior: smooth; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
 }

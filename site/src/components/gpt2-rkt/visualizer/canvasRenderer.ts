@@ -91,12 +91,27 @@ export function createExecutionCanvas(canvas: HTMLCanvasElement, hooks: CanvasHo
   }
   const context = ctx;
   let posted = 0;
+  // Colours and theme are read from CSS once and kept until the theme or size changes,
+  // instead of a getComputedStyle call on every frame.
+  let palette: Palette | null = null;
+  let darkTheme = true;
+  const colorsNow = () => {
+    if (!palette) {
+      palette = readColors(canvas);
+      const themeNode = canvas.closest('[data-theme]') ?? document.documentElement;
+      darkTheme = themeNode.getAttribute('data-theme') !== 'light';
+    }
+    return palette;
+  };
 
   const resize = () => {
     const rect = canvas.getBoundingClientRect();
     width = Math.max(1, rect.width);
     height = Math.max(1, rect.height);
-    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    // Sharp on retina, but never more than ~3.5M device pixels: a full-height canvas at 2x
+    // is cleared and redrawn every animated frame, which weaker GPUs can't keep up with.
+    dpr = Math.min(window.devicePixelRatio || 1, 2, Math.sqrt(3_500_000 / Math.max(1, width * height)));
+    palette = null;
     canvas.width = Math.round(width * dpr);
     canvas.height = Math.round(height * dpr);
     if (width > 40) restage(hooks.getState(), camera.k === 0.82 || stillness());
@@ -505,7 +520,7 @@ export function createExecutionCanvas(canvas: HTMLCanvasElement, hooks: CanvasHo
   }
 
   function paint(context: CanvasRenderingContext2D, state: ExecutionState, calm: boolean, now: number) {
-    const colors = readColors(canvas);
+    const colors = colorsNow();
     context.setTransform(dpr, 0, 0, dpr, 0, 0);
     context.clearRect(0, 0, width, height);
     context.fillStyle = colors.bg;
@@ -537,7 +552,7 @@ export function createExecutionCanvas(canvas: HTMLCanvasElement, hooks: CanvasHo
       context.lineWidth = 2 * unit;
       context.stroke();
     }
-    if (hooks.onPositions && (calm || now - posted > 70)) {
+    if (hooks.onPositions && (calm || now - posted > 120)) {
       posted = now;
       hooks.onPositions(live.map((item) => ({
         id: item.node.id,
@@ -662,8 +677,7 @@ export function createExecutionCanvas(canvas: HTMLCanvasElement, hooks: CanvasHo
     const x = item.x;
     const y = item.y + breath;
     const dim = hot && !hot.has(node.id);
-    const themeNode = canvas.closest('[data-theme]') ?? document.documentElement;
-    const dark = themeNode.getAttribute('data-theme') !== 'light';
+    const dark = darkTheme;
     const selectedNode = nodeById(graph, state.selectedNodeId);
     const selected = state.selectedNodeId === node.id;
     const active = modeBlend > 0.55 && node.stageId === state.activeStageId;
@@ -749,7 +763,7 @@ export function createExecutionCanvas(canvas: HTMLCanvasElement, hooks: CanvasHo
   });
   io.observe(figure);
 
-  const onTheme = () => wake();
+  const onTheme = () => { palette = null; wake(); };
   const theme = new MutationObserver(onTheme);
   const themeRoot = canvas.closest('.wu-root');
   if (themeRoot) theme.observe(themeRoot, { attributes: true, attributeFilter: ['data-theme'] });

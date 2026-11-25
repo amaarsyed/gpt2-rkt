@@ -1,7 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Writeup } from './components/gpt2-rkt/Writeup';
-import { SmoothScroll } from './components/SmoothScroll';
 import { playPop } from './lib/audio';
 import './index.css';
 import './components/iso/iso.css';
@@ -17,8 +16,8 @@ document.addEventListener('pointerdown', (e) => {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <SmoothScroll>
-      <Writeup />
-    </SmoothScroll>
+    {/* Native scrolling: smooth on every device, with nothing in JavaScript between the
+        wheel or finger and the page. */}
+    <Writeup />
   </StrictMode>,
 );
