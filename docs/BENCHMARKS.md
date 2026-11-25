@@ -1,10 +1,49 @@
 # Benchmarks
 
-Recorded on 2026-11-17. Compare numbers only inside one table. A laptop and a cloud VM are not the same measurement, and an earlier revision is not the current sources. Nothing here is an Apple M5 Pro run. The repository does not contain one.
+The Windows and cloud tables were recorded on 2026-11-17, and the Apple M5 Pro tables on 2026-11-25. Compare numbers only inside one table. A laptop and a cloud VM are not the same measurement, and an earlier revision is not the current sources.
 
 Power, temperature, and other programs on the machine were not controlled. Three samples do not establish a statistical result. Where a section says the token ids matched, they matched across the runs in that section.
 
 Allocated megabytes are cumulative bytes allocated during the timed call, with 1 MB = 1,000,000 bytes. They are not memory still in use. Process peaks include loading the weights. Neither counter is the operating system's working set.
+
+## Apple M5 Pro
+
+Apple M5 Pro, 6 performance and 12 efficiency cores, Racket 9.3 CS (Homebrew `minimal-racket`), on AC power, 2026-11-25.
+- **Main suite:** `sh bench/run.sh` at `780d96d`. Each row is a fresh process, one warmup, then the median of three. Greedy decoding includes the four-token prompt. Peak memory in each process, including the loaded weights, was about 2.25 GB.
+
+| Workload | Median |
+| --- | ---: |
+| load | 1.7462 s |
+| prefill 16 | 113.220 ms |
+| prefill 128 | 407.459 ms |
+| prefill 512 | 1503.652 ms |
+| prefill 1000 | 3522.835 ms |
+| decode 128, greedy | 34.3164 tok/s |
+| matmul 768×768×768 | 71.8795 GFLOP/s |
+| matmul 1×768×50257 | 34.6320 GFLOP/s |
+
+- **Revision comparison:** `bench/compare-phases.rkt` in child mode, each revision run twice in alternating order. The figures below average the two medians. All revisions produced the same token ids.
+  - The driver was run with its `rackunit` test submodule removed, because `minimal-racket` does not ship `rackunit`. The timing code is unchanged.
+
+| Revision | Prefill 1000 | Allocated | Greedy 128 |
+| --- | ---: | ---: | ---: |
+| `1ad7035` | 5.59 s | 4,594 MB | 7.15 s |
+| `e8af302` | 3.99 s | 1,555 MB | 4.16 s |
+| `fda38fb` | 4.05 s | 1,555 MB | 4.18 s |
+| `8ed5dc6` | 3.83 s | 1,337 MB | 3.84 s |
+
+- **Worker sweep:** on `8ed5dc6`, with the same budget for decode and prefill workers. Decoding is fastest at 12 workers, not 18. One plausible reason is that single-row products then also wait on the efficiency cores. That was not measured.
+
+| Matrix workers | Prefill 128 | Greedy 128 |
+| ---: | ---: | ---: |
+| 1 | 3900 ms | 10007 ms |
+| 2 | 1918 ms | 5472 ms |
+| 4 | 1083 ms | 3635 ms |
+| 6 | 828 ms | 3179 ms |
+| 12 | 498 ms | 2972 ms |
+| 18 | 437 ms | 4091 ms |
+
+Raw results are in [`bench/results/m5-pro-2026-11-25/`](../bench/results/m5-pro-2026-11-25/).
 
 ## This tree, Windows laptop
 

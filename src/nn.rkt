@@ -7,7 +7,8 @@
          racket/flonum
          racket/future
          racket/unsafe/ops
-         "tensor.rkt")
+         "tensor.rkt"
+         "trace.rkt")
 
 (provide matmul
          matmul-gelu
@@ -78,17 +79,79 @@
      (for ([job (in-list jobs)] #:when job)
        (touch job))]))
 
+;; The same ranges for-parallel-blocks will run. Computed only while a
+;; trace observer is installed, so the fast path does not allocate them.
+(define (covered-ranges total cpus)
+  (cond
+    [(or (fx< cpus 2) (fx< total parallel-axis-threshold))
+     (list (list 0 total))]
+    [else
+     (define blocks (fx* parallel-block-multiple cpus))
+     (let loop ([b 0] [acc '()])
+       (if (fx= b blocks)
+           (reverse acc)
+           (let ([start (quotient (fx* b total) blocks)]
+                 [end (quotient (fx* (fx+ b 1) total) blocks)])
+             (loop (fx+ b 1)
+                   (if (fx< start end)
+                       (cons (list start end) acc)
+                       acc)))))]))
+
+(define (schedule-name v)
+  (cond
+    [(symbol? v) (symbol->string v)]
+    [(eq? v #f) 'null]
+    [else v]))
+
+(define (chunk-record i0 i1 j0 j1)
+  (hasheq 'i0 i0 'i1 i1 'j0 j0 'j1 j1))
+
+;; Policy metadata for one product. Recorded on the caller, before any
+;; future is touched. There is no per-worker timing here.
+(define (note-matmul-schedule! n in out cpus host axis parts)
+  (define chunks
+    (cond
+      [(eq? axis 'serial)
+       (list (chunk-record 0 n 0 out))]
+      [(eq? axis 'row)
+       (for/list ([part (in-list parts)])
+         (chunk-record (car part) (cadr part) 0 out))]
+      [else
+       (for/list ([part (in-list parts)])
+         (chunk-record 0 n (car part) (cadr part)))]))
+  (trace-schedule!
+   (current-trace-observer)
+   (hasheq 'stage (schedule-name (current-trace-stage))
+           'layer (schedule-name (current-trace-layer))
+           'phase (schedule-name (current-trace-phase))
+           'thresholds (hasheq 'work parallel-work-threshold
+                               'axis parallel-axis-threshold)
+           'ops (* n in out)
+           'axis (symbol->string axis)
+           'processorCount host
+           'workerCount cpus
+           'splitCount (length chunks)
+           'chunks chunks)))
+
 ;; All four matrix products use the same row/column split.
 (define (for-matmul-blocks n in out proc)
   (define budget (if (= n 1) (current-decode-workers) (current-prefill-workers)))
-  (define cpus (min (or budget (processor-count)) (processor-count)))
+  (define host (processor-count))
+  (define cpus (min (or budget host) host))
+  (define obs (current-trace-observer))
   (cond
     [(or (< cpus 2) (< (* n in out) parallel-work-threshold))
+     (unless (eq? obs #f)
+       (note-matmul-schedule! n in out cpus host 'serial '()))
      (proc 0 n 0 out)]
     [(fx>= n parallel-axis-threshold)
+     (unless (eq? obs #f)
+       (note-matmul-schedule! n in out cpus host 'row (covered-ranges n cpus)))
      (for-parallel-blocks n cpus
        (lambda (i0 i1) (proc i0 i1 0 out)))]
     [else
+     (unless (eq? obs #f)
+       (note-matmul-schedule! n in out cpus host 'col (covered-ranges out cpus)))
      (for-parallel-blocks out cpus
        (lambda (j0 j1) (proc 0 n j0 j1)))]))
 
@@ -189,6 +252,10 @@
 
 (define (matmul-add x W b residual)
   (define out (matmul x W b))
+  (define cap (current-trace-capture))
+  (unless (eq? cap #f)
+    (set-box! cap (make-tensor (tensor-dims out)
+                               (flvector-copy (tensor-data out)))))
   (unless (and (tensor? residual) (equal? (tensor-dims out) (tensor-dims residual)))
     (raise-argument-error 'matmul-add "residual with the output shape" residual))
   (define data (tensor-data out))
