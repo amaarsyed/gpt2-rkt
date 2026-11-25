@@ -1,5 +1,5 @@
-// The title rushes in once on load and settles, then the write-up takes over.
-export const WORDS = ["GPT-2 in Racket λ"];
+// The lambda rushes in once on load and settles, then the write-up takes over.
+export const WORDS = ["λ"];
 
 export const FONT_VAR =
   "-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
