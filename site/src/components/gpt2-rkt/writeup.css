@@ -1,0 +1,687 @@
+/* The gpt-2 in racket write-up. Same column, type and palette as the home page;
+   the figures break out of the column a little so their small parts stay legible. */
+
+.wu-root {
+  --wu-column: 760px;
+  --wu-wide: 900px;
+  --wu-gutter: calc(clamp(16px, 4.5vw, 28px));
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 18px;
+  line-height: 1.65;
+}
+
+/* Anatomy's tokens, retuned to the portfolio's paper and ink. */
+.wu-root.iso {
+  --anatomy-page: #121210;
+  --anatomy-card: #161614;
+  --anatomy-paper: #161614;
+  --anatomy-face: #1d1d1a;
+  --anatomy-top: #1f1f1c;
+  --anatomy-text: #b5b3ac;
+  --anatomy-muted: #7a7871;
+  --anatomy-strong: #ecebe6;
+}
+
+.wu-root.iso[data-theme='light'] {
+  --anatomy-page: #faf9f7;
+  --anatomy-card: #fdfcfa;
+  --anatomy-paper: #fdfcfa;
+  --anatomy-face: #ffffff;
+  --anatomy-top: #ffffff;
+  --anatomy-text: #55534d;
+  --anatomy-muted: #8b887f;
+  --anatomy-strong: #1c1b19;
+}
+
+.wu-nav {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: var(--wu-column);
+  margin: 0 auto;
+  padding: calc(14px + env(safe-area-inset-top, 0px)) var(--wu-gutter) 10px;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.wu-back {
+  font-size: 15px;
+  text-decoration: none;
+  color: var(--muted);
+}
+
+.wu-back:hover {
+  color: var(--fg);
+}
+
+.wu-main {
+  max-width: var(--wu-column);
+  margin: 0 auto;
+  padding: 36px var(--wu-gutter) calc(64px + env(safe-area-inset-bottom, 0px));
+}
+
+.wu-header {
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.wu-header h1 {
+  margin: 0;
+  font-size: clamp(40px, 8vw, 64px);
+  font-weight: 500;
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+}
+
+.wu-main .wu-deck {
+  max-width: 30em;
+  margin: 14px auto 0;
+  font-size: 19px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.wu-main .wu-byline {
+  margin: 12px 0 0;
+  font-size: 16px;
+  color: var(--muted);
+}
+
+/* GitHub logo link to the repo: just the mark, no background. */
+.wu-gh {
+  display: inline-flex;
+  margin-top: 18px;
+  padding: 4px;
+  border-radius: 8px;
+  color: var(--muted);
+  transition: color 0.18s ease, transform 0.18s ease;
+}
+
+.wu-gh:hover {
+  color: var(--fg);
+  transform: translateY(-1px);
+}
+
+.wu-gh:focus-visible {
+  outline: 2px solid var(--fg);
+  outline-offset: 2px;
+}
+
+.wu-gh svg {
+  width: 26px;
+  height: 26px;
+}
+
+/* Small uppercase label that sits above a heading or callout. */
+.wu-main .wu-kicker {
+  margin: 44px 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.wu-tldr {
+  padding: 18px 22px;
+  border-left: 3px solid var(--accent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--fg) 5%, transparent);
+  font-size: 19px;
+  line-height: 1.55;
+}
+
+.wu-main .wu-lede {
+  margin: 28px 0 0;
+  font-size: 20px;
+  line-height: 1.6;
+}
+
+.wu-byline a {
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.wu-main p {
+  margin: 0 0 22px;
+}
+
+.wu-main p a {
+  color: var(--fg);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--fg) 35%, transparent);
+  text-underline-offset: 3px;
+  transition: text-decoration-color 0.18s ease;
+}
+
+.wu-main p a:hover {
+  text-decoration-color: var(--fg);
+}
+
+.wu-section h2 {
+  margin: 0 0 18px;
+  font-size: clamp(26px, 5vw, 34px);
+  font-weight: 500;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: var(--fg);
+}
+
+/* Rounded surface card for the non-iso blocks and the closing card. */
+.wu-card {
+  margin: 32px 0;
+  padding: 26px 28px;
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--fg) 4%, transparent);
+}
+
+.wu-card-title {
+  margin: 0 0 18px;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.wu-card-title span {
+  margin-left: 6px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+/* "↳" line under a code block: a thin rule and muted text. */
+.wu-main .wu-tie {
+  margin: 4px 0 0;
+  padding-left: 14px;
+  border-left: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+/* Aside note: icon, coloured label, text. */
+.wu-note {
+  display: flex;
+  gap: 16px;
+  margin: 28px 0;
+  padding: 20px 22px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--fg) 5%, transparent);
+}
+
+.wu-note-icon {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  margin-top: 2px;
+  fill: none;
+  stroke: color-mix(in srgb, var(--accent) 75%, var(--fg));
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+.wu-note-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--accent) 75%, var(--fg));
+}
+
+.wu-main .wu-note p {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+@media (max-width: 560px) {
+  .wu-card {
+    padding: 20px 18px;
+  }
+
+  .wu-note {
+    gap: 12px;
+    padding: 16px 16px;
+  }
+}
+
+.wu-shot {
+  margin: 28px 0 32px;
+}
+
+.wu-shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--fg) 12%, transparent);
+}
+
+/* Figures: a touch wider than the text column on desktop, full width on phones. */
+.wu-root .iso-figure {
+  width: min(var(--wu-wide), 100vw - 2 * var(--wu-gutter));
+  margin: 36px 0 40px;
+  margin-left: 50%;
+  transform: translateX(-50%);
+}
+
+.wu-root .iso-plate {
+  background: transparent;
+  box-shadow: none;
+  --anatomy-paper: var(--bg);
+}
+
+.wu-root .iso-legend {
+  max-width: var(--wu-column);
+  margin-inline: auto;
+  padding-inline: 2px;
+}
+
+.wu-root .iso-svg {
+  touch-action: pan-y;
+}
+
+.wu-root .iso-svg:focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--fg) 50%, transparent);
+  outline-offset: 4px;
+  border-radius: 14px;
+}
+
+/* A mouse press focuses the figure for the arrow keys but should not box the drawing. */
+.wu-root .iso-svg[data-pointer]:focus-visible {
+  outline: none;
+}
+
+/* Figure controls: small segmented switches under the drawing, inside the card. */
+.wu-controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.wu-controls button {
+  padding: 5px 11px;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+  color: var(--anatomy-text);
+  font: 12px/1.2 var(--anatomy-mono);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.wu-controls button:hover {
+  background: color-mix(in srgb, var(--fg) 11%, transparent);
+}
+
+.wu-controls button[aria-pressed='true'] {
+  background: var(--fg);
+  color: var(--bg);
+}
+
+.wu-controls button:focus-visible {
+  outline: 2px solid var(--fg);
+  outline-offset: 2px;
+}
+
+/* Closing footer: a thin rule, no card. */
+.wu-endcard {
+  margin-top: 72px;
+  padding-top: 22px;
+  border-top: 1px solid color-mix(in srgb, var(--fg) 14%, transparent);
+  font-size: 15px;
+}
+
+.wu-endcard h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--fg);
+}
+
+.wu-main .wu-endcard .wu-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  margin: 0 0 18px;
+}
+
+.wu-endcard .wu-gh {
+  margin-top: 10px;
+}
+
+.wu-main .wu-endcard .wu-links > a:not(.wu-gh) {
+  margin-top: 10px;
+}
+
+.wu-main .wu-endcard .wu-pair {
+  margin: 0;
+  color: var(--muted);
+}
+
+/* The logo link skips the paragraph link underline. */
+.wu-main p a.wu-gh {
+  text-decoration: none;
+}
+
+.wu-root .wu-needle {
+  stroke-width: 1.1;
+}
+
+/* Fig 3: the output cells as the spindles fill them. */
+.wu-root .wu-cell-done {
+  fill: var(--anatomy-hi);
+  fill-opacity: 0.32;
+  stroke: none;
+}
+
+.wu-root .wu-cell-live {
+  fill: var(--anatomy-lit);
+  fill-opacity: 0.7;
+  stroke: none;
+}
+
+.wu-root .wu-head {
+  transition: opacity 0.4s ease;
+}
+
+.wu-root .wu-head[data-idle] {
+  opacity: 0.38;
+}
+
+/* Code block (shadcn look) + real-text replacements for the old screenshots. */
+.wu-code {
+  overflow: hidden;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--fg) 4%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--fg) 12%, transparent);
+}
+
+.wu-code-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--fg) 10%, transparent);
+  color: var(--muted);
+  font: 12px/1 var(--anatomy-mono, ui-monospace, monospace);
+}
+
+.wu-code-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wu-code-pre {
+  margin: 0;
+  padding: 14px 16px;
+  overflow-x: auto;
+  color: var(--fg);
+  font: 13px/1.7 var(--anatomy-mono, ui-monospace, monospace);
+}
+
+.wu-main .wu-output {
+  margin: 22px 0 10px;
+  font-size: 18px;
+}
+
+.wu-output mark {
+  background: none;
+  color: var(--accent);
+}
+
+.wu-cache {
+  margin: 36px 0;
+}
+
+.wu-cache-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
+.wu-cache-head h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  transition: color 0.3s ease;
+}
+
+.wu-cache-head span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.wu-cache-table {
+  width: 100%;
+  margin-top: 8px;
+  border-collapse: separate;
+  border-spacing: 6px;
+  table-layout: fixed;
+  font-size: 13px;
+}
+
+.wu-cache-table th {
+  padding: 2px 0;
+  color: var(--muted);
+  font-weight: 400;
+  text-align: center;
+}
+
+.wu-cache-table th[scope='row'] {
+  width: 3.6em;
+  text-align: left;
+}
+
+.wu-cache-table code {
+  font: 12px var(--anatomy-mono, ui-monospace, monospace);
+  color: var(--fg);
+}
+
+/* Token labels light up as their column is written. */
+.wu-cache-table thead th code {
+  opacity: 0.35;
+  transition: opacity var(--dur, 220ms) var(--ease-out, ease-out);
+}
+
+.wu-cache-table thead th.is-on code {
+  opacity: 1;
+}
+
+/* An empty slot in the preallocated buffer: a dashed outline. */
+.wu-cell {
+  padding: 7px 0;
+  border-radius: 5px;
+  background: transparent;
+  box-shadow: none;
+  /* Not yet written: only a faint dashed outline, so it reads as a slot waiting, not a field to fill. */
+  outline: 1px dashed color-mix(in srgb, var(--fg) 26%, transparent);
+  outline-offset: -1px;
+  text-align: center;
+  transition: background var(--dur, 220ms) var(--ease-out, ease-out), box-shadow var(--dur, 220ms) var(--ease-out, ease-out), outline-color var(--dur, 220ms) var(--ease-out, ease-out), opacity var(--dur, 220ms) var(--ease-out, ease-out);
+}
+
+.wu-cell > span {
+  display: inline-block;
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity var(--dur, 220ms) var(--ease-out, ease-out), transform var(--dur-slow, 420ms) var(--ease-out, ease-out);
+}
+
+/* Written: the slot fills and the label pops in. */
+.wu-cell.is-on {
+  background: color-mix(in srgb, var(--fg) 7%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fg) 12%, transparent);
+  outline-color: transparent;
+}
+
+.wu-cell.is-on > span {
+  opacity: 1;
+  transform: none;
+}
+
+/* Decode: the prompt's rows are reused as they are, so they step back a little. */
+.wu-cell.is-reused {
+  opacity: 0.6;
+}
+
+/* The comma's freshly written key and value. */
+.wu-cell.is-added {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wu-cell,
+  .wu-cell > span,
+  .wu-cache-table thead th code {
+    transition: none;
+  }
+}
+
+/* The hand-drawn "drag the carriage!" note wraps the drawing in Fig 1. The words' box is
+   reserved at full width from the start so nothing shifts while the pen writes.
+   Wide screens: it sits outside the figure, in the right margin, arrow pointing in at it.
+   Narrower screens have no margin, so it tucks into the figure's empty bottom-left corner. */
+.wu-root .hand-note.wu-fig-note > .hand-note-side {
+  position: absolute;
+  left: 0;
+  top: auto;
+  bottom: 4px;
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: flex-end;
+  gap: 2px;
+  width: max-content;
+  max-width: 100%;
+  margin: 0;
+  transform: none;
+}
+
+.wu-root .hand-note.wu-fig-note .hand-note-arrow {
+  flex: none;
+  width: 124px;
+  height: 68px;
+  margin: 0 0 30px;
+  transform: scaleX(-1) rotate(40deg);
+  transform-origin: center;
+}
+
+.wu-root .hand-note.wu-fig-note .hand-note-text {
+  flex: none;
+  width: 185px;
+  min-height: 0;
+}
+
+@media (max-width: 560px) {
+  .wu-root .hand-note.wu-fig-note .hand-note-arrow {
+    width: 64px;
+    height: 36px;
+    margin-bottom: 8px;
+    transform: scaleX(-1) rotate(28deg);
+  }
+}
+
+@media (min-width: 1240px) {
+  .wu-root .hand-note.wu-fig-note > .hand-note-side {
+    left: calc(100% + 44px);
+    top: 30%;
+    bottom: auto;
+    display: block;
+    width: 9rem;
+  }
+
+  .wu-root .hand-note.wu-fig-note .hand-note-arrow {
+    width: 76px;
+    height: 42px;
+    margin: 0 0 6px;
+    transform: none;
+  }
+
+  .wu-root .hand-note.wu-fig-note .hand-note-text {
+    width: 9rem;
+    min-height: 66px;
+  }
+}
+
+/* Fig 2: the run's sentence, formed word by word under the figure. A word shows up
+   as its row is written; the word under the reading head is highlighted. */
+.wu-main .wu-sentence {
+  max-width: 640px;
+  min-height: 3.3em;
+  margin: 18px auto 0;
+  font-size: 20px;
+  line-height: 1.65;
+  text-align: center;
+}
+
+.wu-word {
+  padding: 2px 5px;
+  margin: 0 -5px;
+  border-radius: 6px;
+  color: var(--muted);
+  transition: color 0.2s ease, background 0.15s ease, box-shadow 0.2s ease, opacity 0.25s ease;
+}
+
+.wu-word[data-state='hidden'] {
+  opacity: 0;
+}
+
+.wu-word[data-state='new'] {
+  color: var(--fg);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.wu-word[data-state='read'] {
+  color: var(--fg);
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wu-word {
+    transition: none;
+  }
+}
+
+/* Fig 2: the two read modes stack in the top-left corner, under the "Fig 2" label.
+   On phones there is no spare corner, so they sit in a row under the drawing. */
+.wu-controls.wu-controls-corner {
+  position: absolute;
+  top: 44px;
+  left: 20px;
+  z-index: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 6px;
+  margin: 0;
+}
+
+@media (max-width: 560px) {
+  .wu-controls.wu-controls-corner {
+    position: static;
+    flex-direction: row;
+    align-items: normal;
+    justify-content: center;
+    margin-top: 14px;
+  }
+}

@@ -1,0 +1,1911 @@
+/* Motion: one ease-out curve and three durations, for everything on this page.
+   Things enter quickly and settle; nothing overshoots. On :root too, for the cards
+   that are portalled outside the page root. */
+:root,
+.wu-root {
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --dur-fast: 150ms;
+  --dur: 220ms;
+  --dur-slow: 420ms;
+}
+
+/*
+ * Scroll-led layout for the GPT-2 write-up. Layout, structure and motion only:
+ * every font and color here is one the page already uses (wu-*, viz-*, palette vars, --accent).
+ */
+
+.wu-root.is-scrolly {
+  --sc-max: 1480px;
+  --sc-text: minmax(0, 620px);
+  --sc-gap: clamp(40px, 5vw, 88px);
+  --sc-top: 64px;
+  --sc-hair: color-mix(in srgb, var(--fg) 12%, transparent);
+  --sc-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  --sc-mono: "SF Mono", ui-monospace, Menlo, monospace;
+}
+
+.wu-root.is-scrolly .wu-main,
+.wu-root.is-scrolly .wu-nav {
+  max-width: var(--sc-max);
+}
+
+/* Room on the right for the mercury rail, which sits at the window edge. */
+@media (min-width: 1100px) {
+  .wu-root.is-scrolly .wu-main {
+    padding-right: max(var(--wu-gutter), 60px);
+  }
+}
+
+.sc-grid {
+  display: grid;
+  grid-template-columns: var(--sc-text) minmax(0, 1fr);
+  gap: var(--sc-gap);
+  align-items: start;
+}
+
+.sc-text {
+  min-width: 0;
+  /* Room after the end card so the last steps can reach the reading line, ~45% down. */
+  padding-bottom: 50vh;
+}
+
+/* Figures that sat wider than the column now stay inside it. */
+.is-scrolly .sc-text .iso-figure {
+  width: 100%;
+  margin-left: 0;
+  transform: none;
+}
+
+/* ---------- steps ---------- */
+
+.wu-step {
+  position: relative;
+  scroll-margin-top: 30vh;
+  transition: opacity var(--dur) var(--ease-out);
+}
+
+.wu-step::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: -18px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+  transform: scaleY(0);
+  transform-origin: top;
+  transition: transform var(--dur-slow) var(--ease-out);
+}
+
+.wu-step[data-active]::before {
+  transform: scaleY(1);
+}
+
+@media (min-width: 1100px) {
+  .sc-grid .wu-step:not([data-active]) {
+    opacity: 0.72;
+  }
+  .sc-grid .wu-step:not([data-active]):hover,
+  .sc-grid .wu-step:not([data-active]):focus-within {
+    opacity: 0.85;
+  }
+}
+
+/* ---------- pinned stage ---------- */
+
+.sc-stage {
+  position: sticky;
+  top: var(--sc-top);
+  min-width: 0;
+  height: calc(100dvh - var(--sc-top) - 16px);
+}
+
+.sc-stage-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+  min-height: 0;
+}
+
+.sc-viz {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 300px;
+  border-top: 1px solid var(--sc-hair);
+  border-bottom: 1px solid var(--sc-hair);
+}
+
+.sc-viz > .viz {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* The canvas fills whatever the pinned stage gives it, on every screen. */
+.sc-viz .viz-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.sc-viz .viz-stage .viz-canvas {
+  height: 100%;
+  min-height: 0;
+}
+
+.sc-wait {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  margin: 0;
+  color: var(--muted);
+  font: 12px/1.4 var(--sc-ui);
+}
+
+/* The sentence under the canvas: what the pulse is doing now. */
+.sc-says {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0;
+  font: 13px/1.4 var(--sc-ui);
+  color: var(--fg);
+}
+
+.sc-says-label {
+  font: 11px/1 var(--sc-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.sc-says-text {
+  min-width: 0;
+}
+
+.sc-says-count {
+  font: 11px/1 var(--sc-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+/* ---------- the dock ---------- */
+
+.sc-dock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 0;
+  border-top: 1px solid var(--sc-hair);
+  border-bottom: 1px solid var(--sc-hair);
+  font: 12px/1 var(--sc-ui);
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+
+/* shadcn primitives keep their behavior; the page's type and color win. */
+:where(.sc-dock, .sc-code) button {
+  font: inherit;
+  letter-spacing: inherit;
+}
+
+.sc-dock-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.sc-dock-transport .sc-scrub {
+  margin-inline: 6px;
+}
+
+.sc-transport {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sc-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  color: var(--fg);
+  background: transparent;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+
+.sc-btn:hover:not(:disabled) {
+  background: var(--faint);
+}
+
+.sc-btn:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.sc-btn svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-width: 0;
+}
+
+.sc-btn-sm {
+  width: 28px;
+  height: 28px;
+}
+
+.sc-btn-sm svg {
+  fill: none;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sc-play {
+  width: 44px;
+  height: 44px;
+  background: var(--accent);
+  color: #1c1b19;
+  box-shadow: 0 0 0 1px color-mix(in srgb, #1c1b19 10%, transparent);
+}
+
+.sc-play:hover:not(:disabled) {
+  background: var(--accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.sc-play svg {
+  width: 16px;
+  height: 16px;
+}
+
+.sc-play[aria-pressed='true'] {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.sc-btn:focus-visible,
+.sc-chip:focus-visible,
+.sc-seg-item:focus-visible,
+.sc-layer:focus-visible,
+.sc-driver button:focus-visible {
+  outline: 2px solid var(--fg);
+  outline-offset: 2px;
+}
+
+/* Who is driving: the paper, or the reader. */
+.sc-driver {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px var(--sc-hair);
+}
+
+.sc-driver button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background var(--dur) var(--ease-out), color var(--dur) var(--ease-out);
+}
+
+.sc-driver button[aria-pressed='true'] {
+  background: var(--fg);
+  color: var(--bg);
+}
+
+.sc-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.sc-driver button[aria-pressed='true'] .sc-dot {
+  background: var(--accent);
+  animation: sc-breathe 1.8s ease-in-out infinite;
+}
+
+@keyframes sc-breathe {
+  50% { opacity: 0.35; }
+}
+
+.sc-label {
+  flex: none;
+  width: 34px;
+  font: 10px/1 var(--sc-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Scrub with token ticks. */
+.sc-scrub {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-bottom: 16px;
+}
+
+.sc-slider [data-slot='slider-track'] {
+  height: 4px;
+  background: var(--faint);
+}
+
+.sc-slider [data-slot='slider-range'] {
+  background: var(--fg);
+}
+
+.sc-slider [data-slot='slider-thumb'] {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--fg);
+  background: var(--accent);
+  box-shadow: none;
+  cursor: grab;
+}
+
+.sc-ticks {
+  position: absolute;
+  left: 7px;
+  right: 7px;
+  bottom: 0;
+  display: flex;
+  justify-content: space-between;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  pointer-events: none;
+}
+
+.sc-ticks li {
+  position: relative;
+  width: 0;
+  display: flex;
+  justify-content: center;
+}
+
+.sc-ticks span {
+  font: 9px/1 var(--sc-mono);
+  white-space: nowrap;
+  color: var(--muted);
+  opacity: 0;
+  transform: translateY(2px);
+  transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+
+.sc-ticks li::before {
+  content: '';
+  position: absolute;
+  top: -10px;
+  width: 1px;
+  height: 4px;
+  background: var(--sc-hair);
+}
+
+.sc-ticks li[data-past]::before {
+  background: color-mix(in srgb, var(--fg) 40%, transparent);
+}
+
+.sc-ticks li[data-on] span,
+.sc-scrub:hover .sc-ticks li:nth-child(4n + 1) span {
+  opacity: 1;
+  transform: none;
+}
+
+.sc-ticks li[data-on] span {
+  color: var(--fg);
+}
+
+.sc-read {
+  flex: none;
+  font: 11px/1 var(--sc-mono);
+  color: var(--muted);
+}
+
+/* Stage chips: the pipeline, clickable. */
+.sc-chips {
+  gap: 4px;
+}
+
+.sc-chip-scroll {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  mask-image: linear-gradient(90deg, #000 85%, transparent);
+}
+
+.sc-chip-scroll::-webkit-scrollbar { display: none; }
+
+.sc-chip { flex: none; }
+
+.sc-chip {
+  height: 24px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--sc-hair);
+  color: var(--muted);
+  font: 11px/1 var(--sc-ui);
+  cursor: pointer;
+  transition: background var(--dur) var(--ease-out), color var(--dur) var(--ease-out), box-shadow var(--dur) var(--ease-out);
+}
+
+.sc-chip:hover:not(:disabled) {
+  color: var(--fg);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fg) 35%, transparent);
+}
+
+.sc-chip[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+  color: var(--fg);
+}
+
+/* Segmented groups (mode, speed, layer). */
+.sc-dock-settings {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+
+.sc-seg,
+.sc-layer-strip {
+  gap: 0;
+  padding: 2px;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px var(--sc-hair);
+}
+
+.sc-seg-item,
+.sc-layer {
+  height: 24px;
+  min-width: 0;
+  padding: 0 10px;
+  border-radius: 999px !important;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.sc-seg-item:hover,
+.sc-layer:hover {
+  background: transparent;
+  color: var(--fg);
+}
+
+.sc-seg-item[data-state='on'],
+.sc-layer[data-state='on'] {
+  background: var(--fg);
+  color: var(--bg);
+}
+
+.sc-tools {
+  display: inline-flex;
+  flex: none;
+}
+
+.sc-layer {
+  width: 21px;
+  padding: 0;
+  font: 10px/1 var(--sc-mono);
+}
+
+.sc-layers {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.sc-layers .sc-label {
+  width: auto;
+}
+
+.sc-layers[data-off] {
+  opacity: 0.45;
+}
+
+/* ---------- code walk ---------- */
+
+.sc-code-toggle {
+  display: none;
+}
+
+.sc-code-slot {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sc-code {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100%;
+  min-height: 0;
+}
+
+.sc-code-map {
+  flex: none;
+}
+
+.sc-code-map svg {
+  display: block;
+  overflow: visible;
+}
+
+.sc-code-map text {
+  font-family: var(--sc-mono);
+  font-size: 2px;
+}
+
+/* Desktop reads the files off the map; phones get the tab strip. */
+.sc-code-tabs {
+  display: none;
+}
+
+.sc-code-map g[role='button']:focus-visible circle {
+  stroke: var(--fg);
+}
+
+.sc-code-tabs {
+  flex: none;
+}
+
+.sc-tabs {
+  display: flex;
+  height: auto;
+  width: 100%;
+  gap: 2px;
+  padding: 0;
+  overflow-x: auto;
+  background: transparent;
+  border-bottom: 1px solid var(--sc-hair);
+  border-radius: 0;
+  scrollbar-width: none;
+}
+
+.sc-tab {
+  flex: none;
+  height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none !important;
+  color: var(--muted);
+  font: 11px/1 var(--sc-mono);
+  cursor: pointer;
+  transition: color var(--dur) var(--ease-out), border-color var(--dur) var(--ease-out);
+}
+
+.sc-tab[data-state='active'] {
+  color: var(--fg);
+  border-bottom-color: var(--accent);
+  background: transparent;
+}
+
+.sc-code-body {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sc-code .viz-source {
+  margin-top: 0;
+  font: 12px/1.45 var(--sc-ui);
+}
+
+.sc-code .viz-code {
+  max-height: min(240px, 26vh);
+}
+
+.sc-code .viz-code .is-walk {
+  background: color-mix(in srgb, var(--accent) 34%, transparent);
+  box-shadow: inset 2px 0 0 var(--accent);
+  transition: background var(--dur) var(--ease-out);
+}
+
+.sc-code .viz-line-note {
+  display: block;
+  padding-left: 2.4em;
+  color: var(--muted);
+  white-space: normal;
+  animation: sc-note-in var(--dur) var(--ease-out) both;
+}
+
+@keyframes sc-note-in {
+  from { opacity: 0; transform: translateY(-2px); }
+}
+
+/* ---------- mercury rail and the return pill ---------- */
+
+.wu-root .sc-toc {
+  right: 4px;
+  z-index: 30;
+}
+
+.wu-root .sc-toc button {
+  padding-top: 0;
+  padding-bottom: 0;
+  padding-left: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+}
+
+.wu-root .sc-toc span {
+  font-family: var(--sc-mono);
+  font-size: 11px;
+}
+
+.sc-return {
+  position: fixed;
+  left: max(var(--wu-gutter), calc(50% - var(--sc-max) / 2 + var(--wu-gutter)));
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  z-index: 31;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--fg);
+  color: var(--bg);
+  font: 12px/1 var(--sc-ui);
+  cursor: pointer;
+  animation: sc-note-in var(--dur) var(--ease-out) both;
+}
+
+.sc-return span {
+  color: var(--accent);
+}
+
+/* ---------- narrower screens ---------- */
+
+@media (max-width: 1099px) {
+  .sc-grid {
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 24px;
+  }
+
+  .sc-text {
+    max-width: var(--wu-column);
+    margin-inline: auto;
+    padding-right: 0;
+  }
+
+  .sc-stage {
+    top: 0;
+    z-index: 20;
+    width: 100%;
+    height: auto;
+    padding-top: 6px;
+    background: var(--bg);
+  }
+
+  .sc-viz {
+    height: 44vh;
+    min-height: 260px;
+    flex: none;
+  }
+
+  .sc-chips,
+  .sc-dock-settings,
+  .sc-says-count {
+    display: none;
+  }
+
+  .sc-code-tabs {
+    display: block;
+  }
+
+  .sc-code-toggle {
+    display: inline-flex;
+    align-self: flex-start;
+    height: 26px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--sc-hair);
+    color: var(--fg);
+    font: 11px/1 var(--sc-mono);
+    cursor: pointer;
+  }
+
+  .sc-code-slot:not([data-open]) {
+    display: none;
+  }
+
+  .wu-step::before {
+    left: -10px;
+  }
+}
+
+@media (max-width: 560px) {
+  .sc-viz {
+    height: 36vh;
+    min-height: 220px;
+  }
+
+  .sc-says {
+    display: none;
+  }
+
+  .sc-dock {
+    padding: 6px 0;
+  }
+
+  .sc-ticks {
+    display: none;
+  }
+
+  .sc-scrub {
+    padding-bottom: 0;
+  }
+
+  .sc-driver button {
+    padding: 0 8px;
+  }
+
+  .sc-code-map {
+    display: none;
+  }
+
+  .sc-dock-transport {
+    flex-wrap: wrap;
+  }
+
+  .wu-root .sc-toc {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wu-step,
+  .wu-step::before,
+  .sc-btn,
+  .sc-chip,
+  .sc-driver button,
+  .sc-ticks span,
+  .sc-tab {
+    transition: none;
+  }
+
+  .sc-driver button[aria-pressed='true'] .sc-dot,
+  .sc-return,
+  .sc-code .viz-line-note {
+    animation: none;
+  }
+}
+
+/* The run's sentence under the pinned canvas: the cache figure's sentence, word for word. */
+.sc-viz .viz-bottom {
+  background: transparent;
+}
+
+.sc-viz .wu-main .wu-sentence,
+.wu-main .sc-viz .viz-sentence {
+  max-width: none;
+  min-height: 0;
+  margin: 6px auto 4px;
+  white-space: normal;
+}
+
+/* The legend reads first: up top, under the caption, in the mono voice the code uses. */
+.sc-viz .viz-caption { order: -2; }
+
+.sc-viz .viz-legend {
+  order: -1;
+  gap: 22px;
+  padding: 10px 12px 4px;
+  color: var(--fg);
+  font: 500 11px/1 var(--sc-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sc-viz .viz-legend span {
+  gap: 8px;
+  height: 24px;
+  background: transparent;
+}
+
+.sc-viz .viz-legend i {
+  width: 9px;
+  height: 9px;
+}
+
+.sc-viz .viz-legend i[data-swatch='residual'] { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
+.sc-viz .viz-legend i[data-swatch='attention'] { box-shadow: 0 0 0 3px color-mix(in srgb, var(--anatomy-blue) 25%, transparent); }
+.sc-viz .viz-legend i[data-swatch='future'] { box-shadow: 0 0 0 3px color-mix(in srgb, var(--anatomy-green) 25%, transparent); }
+.sc-viz .viz-legend i[data-swatch='memory'] { box-shadow: 0 0 0 3px color-mix(in srgb, var(--anatomy-red) 25%, transparent); }
+
+/* Tight stage: no spacing between the pinned pieces. */
+.sc-stage-inner { gap: 0; }
+.sc-viz .viz { gap: 0; }
+.sc-viz .viz-caption,
+.sc-viz .viz-bottom { padding-block: 0; }
+.sc-viz .viz-legend { padding: 0; }
+.wu-main .sc-viz .viz-sentence {
+  margin: 0;
+  padding: 0;
+  line-height: 1.4;
+}
+.sc-says { padding: 0; margin: 0; }
+.sc-code { gap: 0; }
+.sc-code-map svg { margin: 0; }
+.sc-code .viz-source,
+.sc-code .viz-code,
+.sc-code .viz-call { margin: 0; }
+
+/* Full bleed: the two columns run edge to edge, no centered max width. */
+.wu-root.is-scrolly {
+  --sc-max: 100vw;
+  --sc-text: minmax(0, 5fr);
+  --sc-gap: 40px;
+}
+
+.wu-root.is-scrolly .wu-main,
+.wu-root.is-scrolly .wu-nav {
+  max-width: none;
+  margin: 0;
+  padding-left: 24px;
+}
+
+@media (min-width: 1100px) {
+  .sc-grid {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  }
+
+  .wu-root.is-scrolly .wu-main,
+  .wu-root.is-scrolly .wu-nav {
+    padding-right: 60px; /* only the mercury rail's width */
+  }
+
+  /* Breathing room on the write-up's outer edge only. The grid columns are unchanged,
+     so the visualizer keeps its width and position. */
+  .wu-root.is-scrolly .sc-text {
+    padding-left: clamp(24px, 4vw, 72px);
+  }
+}
+
+.wu-root.is-scrolly .wu-main {
+  padding-top: 12px;
+}
+
+/* ---------- code cards in the write-up (replace the isometric figures) ---------- */
+
+
+.wu-main .cc-caption {
+  margin: 16px 0 0;
+  padding: 2px 0 2px 16px;
+  border-left: 1px solid color-mix(in srgb, var(--fg) 35%, transparent);
+  color: var(--muted);
+  font: 17px/1.55 "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+}
+
+.wu-main .cc-caption b {
+  color: var(--fg);
+  font-weight: 700;
+}
+
+@media (max-width: 560px) {
+  .cc-code {
+    padding: 16px;
+    font-size: 12.5px;
+  }
+
+}
+
+/* ---------- node detail: a clicked node's what / math / code, in the write-up ---------- */
+
+.nd {
+  --viz-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  --viz-display: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  --viz-mono: "SF Mono", ui-monospace, Menlo, monospace;
+  --viz-amber-text: #f5c400;
+  position: sticky;
+  bottom: 66px; /* clear of the "back to the text" pill */
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  max-height: min(62vh, 640px);
+  margin-top: 24px;
+  border-radius: 14px;
+  background: var(--bg);
+  box-shadow:
+    0 0 0 1px var(--sc-hair),
+    0 18px 50px -12px color-mix(in srgb, #000 45%, transparent);
+  font-family: var(--viz-ui);
+  animation: sc-note-in var(--dur) var(--ease-out) both;
+}
+
+.wu-root[data-theme='light'] .nd {
+  --viz-amber-text: #8f6200;
+}
+
+.nd-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px 10px 18px;
+  border-bottom: 1px solid var(--sc-hair);
+}
+
+.nd-title {
+  font: 600 11px/1 var(--sc-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg);
+}
+
+.nd-tabs {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.nd-tabs button,
+.nd-close {
+  height: 26px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: 12px/1 var(--viz-ui);
+  cursor: pointer;
+}
+
+.nd-tabs button[aria-selected='true'] {
+  background: var(--fg);
+  color: var(--bg);
+}
+
+.nd-close {
+  margin-left: auto;
+  width: 26px;
+  padding: 0;
+  font-size: 18px;
+}
+
+.nd-close:hover,
+.nd-tabs button:hover:not([aria-selected='true']) {
+  color: var(--fg);
+}
+
+.nd-body {
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 18px 18px;
+}
+
+.nd-what p {
+  margin: 0 0 10px;
+}
+
+.nd-body .cc {
+  margin: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nd { animation: none; }
+}
+
+/* The sentence floats up into the canvas's empty bottom edge: no rules, no backdrop. */
+.sc-viz {
+  border-top: 0;
+  border-bottom: 0;
+}
+
+.sc-viz .viz-bottom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 6%;
+  z-index: 2;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  pointer-events: none;
+}
+
+.sc-viz .viz-sentence .wu-word {
+  pointer-events: auto;
+  display: inline-block;
+  transition: color 0.3s ease, box-shadow 0.3s ease, opacity 0.45s ease, transform 0.45s ease, filter 0.45s ease;
+}
+
+/* Words not yet reached wait just below the line, blurred, and rise into place. */
+.sc-viz .viz-sentence .wu-word[data-state='hidden'] {
+  transform: translateY(6px);
+  filter: blur(3px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sc-viz .viz-sentence .wu-word { transition: none; transform: none; filter: none; }
+}
+
+/* Legend, quieter: the page's own sans in sentence case, aligned with the caption,
+   and each swatch drawn as a short stroke, the way those edges are drawn on the canvas. */
+.sc-viz .viz-legend {
+  gap: 24px;
+  padding: 10px 12px 0;
+  color: var(--fg);
+  font: 500 14px/1 "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  letter-spacing: -0.005em;
+  text-transform: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+.sc-viz .viz-legend span {
+  align-items: center;
+  gap: 8px;
+  height: auto;
+}
+
+.sc-viz .viz-legend i,
+.sc-viz .viz-legend i[data-swatch] {
+  width: 18px;
+  height: 3px;
+  border-radius: 2px;
+  box-shadow: none;
+}
+
+/* The visualizer's caption row is off in the pinned stage. */
+.sc-viz .viz-caption { display: none; }
+
+/* Equations: KaTeX, centered when displayed, no box. */
+.wu-main .tex-block {
+  margin: 18px 0 22px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  text-align: center;
+  color: var(--fg);
+  font-size: 1.08em;
+  scrollbar-width: none;
+}
+
+.wu-main .tex-inline {
+  white-space: nowrap; /* a formula never breaks across lines */
+}
+
+.wu-main .tex-inline .katex {
+  font-size: 0.96em;
+}
+
+/* The loading detail, as one quiet line under the byline. */
+.wu-main .wu-aside-line {
+  max-width: 34em;
+  margin: 10px auto 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.wu-main .wu-aside-line b {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+/* ---------- .rkt terms: hover a word, see the file, what it does, and its code ---------- */
+
+.wu-main a.rkt-term {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* A code reference in the prose: an inline code chip that links to the file. */
+.wu-main .rkt-term code {
+  padding: 0.12em 0.38em;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--fg) 7%, transparent);
+  color: var(--fg);
+  font: 400 0.82em/1 "IBM Plex Mono", "SF Mono", ui-monospace, Menlo, monospace;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  transition: background var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.wu-root[data-theme='light'] .wu-main .rkt-term code {
+  background: #efeee9;
+  color: #1a1a1a;
+}
+
+.wu-main .rkt-term:hover code,
+.wu-main .rkt-term:focus-visible code,
+.wu-main .rkt-term[data-state='open'] code {
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
+  box-shadow: inset 0 -1.5px 0 var(--accent);
+}
+
+.wu-main .rkt-term:focus-visible { outline: none; }
+
+.rkt-card {
+  --rk-bg: #18181a;
+  --rk-line: rgba(255, 255, 255, 0.07);
+  --rk-fg: #ecebe6;
+  --rk-muted: #9c998f;
+  z-index: 60;
+  width: max-content;
+  max-width: min(320px, calc(100vw - 32px));
+  padding: 11px 14px 12px;
+  border-radius: 14px;
+  background: var(--rk-bg);
+  color: var(--rk-fg);
+  box-shadow:
+    0 0 0 1px var(--rk-line),
+    0 1px 0 0 rgba(255, 255, 255, 0.05) inset,
+    0 24px 48px -16px rgba(0, 0, 0, 0.6),
+    0 8px 16px -8px rgba(0, 0, 0, 0.4);
+  font: 13.5px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  transform-origin: var(--radix-hover-card-content-transform-origin);
+  animation: rkt-in var(--dur) var(--ease-out) both;
+}
+
+@keyframes rkt-in {
+  from { opacity: 0; transform: translateY(4px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+
+.rkt-card-arrow { fill: var(--rk-bg); }
+
+.rkt-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px 0;
+}
+
+.rkt-card-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--rk-fg);
+  font: 500 12.5px/1 "IBM Plex Mono", "SF Mono", ui-monospace, Menlo, monospace;
+}
+
+.rkt-card-file > i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.rkt-card-dir { color: var(--rk-muted); }
+
+.rkt-card-src {
+  padding: 3px 7px;
+  border-radius: 6px;
+  color: var(--rk-muted);
+  font: 500 11px/1 "IBM Plex Mono", "SF Mono", ui-monospace, Menlo, monospace;
+  text-decoration: none;
+  transition: color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+}
+
+.rkt-card-src:hover,
+.rkt-card-src:focus-visible {
+  outline: none;
+  color: var(--rk-fg);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.rkt-card > .rkt-card-file {
+  margin: 0 0 4px;
+  font: 500 12px/1.3 "IBM Plex Mono", "SF Mono", ui-monospace, Menlo, monospace;
+}
+
+.rkt-card-what {
+  margin: 0;
+  padding: 0;
+  color: #c9c6bd;
+  text-wrap: pretty;
+}
+
+.rkt-card {
+  --foreground: var(--rk-fg);
+  --muted-foreground: var(--rk-muted);
+  --input: var(--rk-line);
+  --muted: #5c5a55;
+}
+.rkt-card .cc { margin: 0; }
+.rkt-card .cc .cc-code { max-height: 180px; font-size: 12px; }
+
+
+
+.rkt-card-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 10px 6px;
+  color: var(--rk-muted);
+  font-size: 11.5px;
+}
+
+.rkt-card-live {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: rkt-live 1.6s ease-in-out infinite;
+}
+
+@keyframes rkt-live {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rkt-card, .rkt-card-live { animation: none; }
+}
+
+/* ---------- play bar: pause the walk through a step's stages, or step it by hand ---------- */
+
+.sc-stage-inner { position: relative; }
+
+.sc-transport {
+  position: absolute;
+  top: -6px;
+  right: 12px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 34px;
+  font-family: var(--sc-ui);
+}
+
+/* Bare symbols: no border, no fill, no box. Muted at rest, full ink on hover. */
+.sc-transport .sc-transport-btn,
+.sc-transport .sc-transport-main,
+.sc-transport .sc-transport-speed {
+  width: 30px;
+  height: 30px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+
+.sc-transport .sc-transport-btn:hover,
+.sc-transport .sc-transport-main:hover,
+.sc-transport .sc-transport-speed:hover,
+.sc-transport button:focus-visible {
+  color: var(--fg);
+  background: transparent;
+}
+
+.sc-transport button:active:not(:disabled) { transform: scale(0.92); }
+.sc-transport button:focus-visible { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 60%, transparent); }
+.sc-transport button:disabled { opacity: 0.35; cursor: default; }
+
+.sc-transport svg { width: 15px; height: 15px; }
+
+/* Play is the one solid shape, slightly larger, in full ink. */
+.sc-transport .sc-transport-main { color: var(--fg); }
+.sc-transport .sc-transport-main svg { width: 17px; height: 17px; fill: currentColor; }
+.sc-transport .sc-transport-main[aria-pressed='true'] { color: var(--fg); }
+
+.sc-transport .sc-transport-speed {
+  width: auto;
+  padding: 0 6px;
+  font: 500 12px/1 "IBM Plex Mono", "SF Mono", ui-monospace, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.sc-transport-now {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-left: 8px;
+  white-space: nowrap;
+}
+
+.sc-transport-label {
+  color: var(--fg);
+  font: 500 13px/1 var(--sc-ui);
+}
+
+.sc-transport-pos {
+  color: var(--muted);
+  font: 400 12px/1 var(--sc-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- equations: hover a symbol to see what it means ---------- */
+
+.tex-block [data-sym],
+.tex-inline [data-sym] {
+  border-radius: 6px;
+  cursor: help;
+  transition: background var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.tex-block [data-sym]:hover,
+.tex-inline [data-sym]:hover {
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+/* Each occurrence of the hovered symbol lights, so x_i on both sides reads as one thing. */
+.tex-tip {
+  position: fixed;
+  z-index: 70;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  column-gap: 14px;
+  width: max-content;
+  max-width: 340px;
+  padding: 12px 16px 13px 14px;
+  border-radius: 10px;
+  background: #18181a;
+  color: #cfccc3;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.07), 0 18px 40px -14px rgba(0, 0, 0, 0.6);
+  font: 400 14px/1.55 "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  letter-spacing: -0.005em;
+  text-wrap: pretty;
+  -webkit-font-smoothing: antialiased;
+  transform: translate(-50%, calc(-100% - 12px));
+  pointer-events: none;
+  animation: tex-tip-in var(--dur-fast) var(--ease-out) both;
+}
+
+/* The symbol itself, typeset, in a small tile beside its meaning. */
+.tex-tip-sym {
+  display: grid;
+  place-items: center;
+  min-width: 40px;
+  height: 40px;
+  padding: 0 9px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
+  color: #f3f1ea;
+  font-size: 19px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.tex-tip-what .katex {
+  color: #f3f1ea;
+  font-size: 1.08em;
+}
+
+@keyframes tex-tip-in {
+  from { opacity: 0; translate: 0 4px; }
+  to { opacity: 1; translate: 0 0; }
+}
+
+.tex-tip b {
+  display: block;
+  margin-bottom: 3px;
+  color: #ecebe6;
+  font: 500 12px/1.2 "IBM Plex Mono", "SF Mono", ui-monospace, Menlo, monospace;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tex-tip { animation: none; }
+}
+
+/* ---------- code cards: shadcn's code block, in the page's colors ---------- */
+
+.cc {
+  --cc-kw: #d49ac2;
+  --cc-fn: #8fb7e8;
+  --cc-num: #e8ae6b;
+  --cc-str: #b1d095;
+  --cc-pn: #7f7c75;
+  --cc-cmt: #7a7871;
+}
+
+.wu-root[data-theme='light'] .cc {
+  --cc-kw: #a23f78;
+  --cc-fn: #2c5d9c;
+  --cc-num: #a95f12;
+  --cc-str: #4c7a28;
+  --cc-pn: #9a968b;
+  --cc-cmt: #8a867c;
+}
+
+.wu-main .cc { margin: 28px 0 32px; }
+
+.cc .cc-code {
+  margin: 0;
+  font: 13px/1.75 "IBM Plex Mono", "SF Mono", ui-monospace, Menlo, monospace;
+}
+
+.cc .cc-gap { height: 0.6lh; min-height: 0; }
+.cc .cc-gap::before { content: '' !important; }
+
+.cc-kw { color: var(--cc-kw); }
+.cc-fn { color: var(--cc-fn); }
+.cc-num { color: var(--cc-num); }
+.cc-str { color: var(--cc-str); }
+.cc-pn { color: var(--cc-pn); }
+.cc-cmt { color: var(--cc-cmt); font-style: italic; }
+
+/* The title, a touch smaller beside the pinned visualizer. */
+.wu-root.is-scrolly .wu-header h1 {
+  font-size: clamp(36px, 6.5vw, 54px);
+}
+
+/* Title, deck, byline and the GitHub mark sit on the column's left edge, like the text below. */
+.wu-root.is-scrolly .wu-header {
+  text-align: left;
+}
+
+.wu-root.is-scrolly .wu-main .wu-deck {
+  margin-left: 0;
+  margin-right: 0;
+}
+
+/* The mark has 4px of padding; pull it back so the glyph lines up with the text. */
+.wu-root.is-scrolly .wu-header .wu-gh {
+  margin-left: -4px;
+}
+
+/* The write-up's type scale. Six sizes, set directly rather than by zooming the column:
+   11 labels · 13 notes and tables · 15 byline and end card · 16.5 body · 18 deck and lede · 31 headings. */
+@media (min-width: 1100px) {
+  .wu-root.is-scrolly .sc-text { font-size: 16.5px; }
+  .wu-root.is-scrolly .wu-header h1 { font-size: clamp(34px, 5.6vw, 50px); }
+  .wu-root.is-scrolly .wu-main .wu-deck,
+  .wu-root.is-scrolly .wu-main .wu-lede { font-size: 18px; }
+  .wu-root.is-scrolly .wu-main .wu-byline,
+  .wu-root.is-scrolly .wu-endcard { font-size: 15px; }
+  .wu-root.is-scrolly .wu-tldr { font-size: 16.5px; }
+  .wu-root.is-scrolly .wu-section h2 { font-size: clamp(24px, 4.4vw, 31px); }
+  .wu-root.is-scrolly .wu-main .wu-kicker,
+  .wu-root.is-scrolly .cs-head { font-size: 11px; }
+  .wu-root.is-scrolly .wu-main .wu-aside-line,
+  .wu-root.is-scrolly .wu-cache-head h3,
+  .wu-root.is-scrolly .wu-bench table { font-size: 13px; }
+  .wu-root.is-scrolly .cs-card { font-size: 12px; }
+}
+
+/* ---------- code cards in the write-up: one file each, sized to what they show ---------- */
+
+.cs-card {
+  --cs-bg: #fdfcf9;
+  --cs-tabbg: #f4f2ec;
+  --cs-edge: rgba(28, 27, 25, 0.12);
+  --cs-fg: #23221f;
+  --cs-muted: #8a867c;
+  --cs-ln: #b7b3a8;
+  --cs-focus: color-mix(in srgb, var(--accent) 9%, transparent);
+  --cc-kw: #a23f78;
+  --cc-fn: #2c5d9c;
+  --cc-num: #a95f12;
+  --cc-str: #4c7a28;
+  --cc-pn: #9a968b;
+  --cc-cmt: #8a867c;
+  display: flex;
+  flex-direction: column;
+  margin: 26px 0 30px;
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--cs-bg);
+  color: var(--cs-fg);
+  box-shadow: 0 0 0 1px var(--cs-edge), 0 16px 36px -28px rgba(0, 0, 0, 0.45);
+  font: 12.5px/1.7 "IBM Plex Mono", "SF Mono", ui-monospace, Menlo, monospace;
+  transition: transform var(--dur-slow) var(--ease-out), opacity var(--dur-slow) var(--ease-out);
+}
+
+.wu-root[data-theme='dark'] .cs-card {
+  --cs-bg: #19191b;
+  --cs-tabbg: #1f1f22;
+  --cs-edge: rgba(255, 255, 255, 0.09);
+  --cs-fg: #e8e6dd;
+  --cs-muted: #8f8d86;
+  --cs-ln: #4d4b47;
+  --cs-focus: color-mix(in srgb, var(--accent) 6%, transparent);
+  --cc-kw: #d49ac2;
+  --cc-fn: #8fb7e8;
+  --cc-num: #e8ae6b;
+  --cc-str: #b1d095;
+  --cc-pn: #7f7c75;
+  --cc-cmt: #7a7871;
+}
+
+.cs-card[data-state='next'] {
+  opacity: 0;
+  transform: translateY(28px);
+}
+
+.cs-head {
+  display: flex;
+  align-items: center;
+  flex: none;
+  height: 34px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--cs-edge);
+  background: var(--cs-tabbg);
+  font-size: 12px;
+}
+
+.cs-title { color: var(--cs-fg); }
+
+/* Sized to the code, up to about sixteen lines; longer files scroll inside, opened at the tinted lines. */
+.cs-body {
+  position: relative;
+  max-height: calc(16 * 1.7em + 28px);
+  overflow: auto;
+  scrollbar-width: thin;
+}
+
+.cs-code {
+  margin: 0;
+  padding: 10px 0 18px;
+  font: inherit;
+  white-space: pre;
+}
+
+.cs-chunk { display: contents; }
+
+.cs-line {
+  display: block;
+  min-width: max-content;
+  padding-right: 18px;
+  border-left: 2px solid transparent;
+}
+
+.cs-line[data-focus] {
+  background: var(--cs-focus);
+  border-left-color: color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+.cs-gap { height: 0.7lh; }
+
+.cs-ln {
+  display: inline-block;
+  width: 3.2em;
+  margin-right: 16px;
+  color: var(--cs-ln);
+  text-align: right;
+  user-select: none;
+}
+
+.cs-line[data-focus] .cs-ln { color: var(--cs-fg); }
+.cs-tree .cs-line { padding-left: 18px; }
+.cs-note { margin-left: 2ch; color: var(--cs-muted); font-style: italic; }
+
+@media (max-width: 560px) {
+  .cs-card { font-size: 11.5px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cs-card { transition: none; }
+}
+
+/* The method note under a measured result sits on the text's left edge. */
+.wu-main .wu-section .wu-aside-line { margin: 4px 0 0; max-width: none; }
+
+/* ---------- the M5 Pro results table ---------- */
+
+.wu-main .wu-bench {
+  margin: 28px 0 8px;
+  scroll-margin-top: 24vh;
+}
+
+.wu-bench-title {
+  margin: 0 0 10px;
+  color: var(--fg);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.wu-bench-title span {
+  margin-left: 8px;
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.wu-bench table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14.5px;
+}
+
+.wu-bench th,
+.wu-bench td {
+  padding: 7px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--fg) 9%, transparent);
+}
+
+.wu-bench th {
+  color: var(--muted);
+  font-weight: 400;
+  text-align: left;
+}
+
+.wu-bench td {
+  color: var(--fg);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.wu-bench-note {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.wu-bench-note code {
+  font: 0.92em "IBM Plex Mono", "SF Mono", ui-monospace, Menlo, monospace;
+}
+
+.wu-main .wu-links a + a { margin-left: 16px; }
+
+/* Key numbers and terms in the prose: full ink, a touch heavier. */
+.wu-main .wu-section p strong,
+.wu-main .wu-tldr strong {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+/* ---------- a clicked node's math, on the visualizer ---------- */
+
+.nm {
+  --nm-surface: color-mix(in srgb, var(--fg) 6%, var(--bg));
+  --nm-raised: color-mix(in srgb, var(--fg) 10%, var(--bg));
+  --nm-line: color-mix(in srgb, var(--fg) 13%, transparent);
+  --nm-role: var(--fg);
+  position: absolute;
+  top: 44px;
+  left: 12px;
+  /* Above the canvas, its node labels and tips. */
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  width: min(380px, calc(100% - 24px));
+  max-height: calc(100% - 64px);
+  overflow: hidden;
+  border-radius: 14px;
+  background: var(--nm-surface);
+  color: var(--fg);
+  box-shadow:
+    0 0 0 1px var(--nm-line),
+    0 1px 0 0 color-mix(in srgb, var(--fg) 6%, transparent) inset,
+    0 24px 48px -24px rgba(0, 0, 0, 0.5),
+    0 8px 16px -12px rgba(0, 0, 0, 0.35);
+  font: 400 13.5px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  transform-origin: top left;
+  animation: nm-in var(--dur) var(--ease-out) both;
+}
+
+@keyframes nm-in {
+  from { opacity: 0; transform: translateY(4px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+
+.nm[data-role='residual'] { --nm-role: var(--accent); }
+.nm[data-role='attention'] { --nm-role: var(--anatomy-blue); }
+.nm[data-role='memory'] { --nm-role: var(--anatomy-red); }
+.nm[data-role='future'] { --nm-role: var(--anatomy-green); }
+.nm[data-role='module'] { --nm-role: var(--muted); }
+
+.nm-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 12px 10px 10px 14px;
+}
+
+.nm-head i {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--nm-role);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--nm-role) 22%, transparent);
+}
+
+.nm-head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.nm-meta {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.nm-close {
+  all: unset;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin-left: auto;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+
+.nm-close:hover,
+.nm-close:focus-visible {
+  color: var(--fg);
+  background: var(--nm-raised);
+}
+
+.nm-body {
+  overflow: auto;
+  padding: 0 14px 14px;
+  scrollbar-width: thin;
+}
+
+.nm-idea {
+  margin: 0 0 12px;
+  color: color-mix(in srgb, var(--fg) 82%, transparent);
+  text-wrap: pretty;
+}
+
+/* The equation sits on a raised plate so it reads as the centre of the card. */
+.nm-eq {
+  margin: 0 -2px 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--nm-raised);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.nm-eq .tex-block {
+  margin: 0;
+  font-size: 15px;
+}
+
+.nm-eq .katex-display { margin: 0; }
+
+.nm-live h4 {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.nm-line { margin: 0 0 8px; }
+.nm-line b { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.nm-tokens {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.nm-token {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 5px 9px 4px;
+  border-radius: 6px;
+  background: var(--nm-raised);
+}
+
+.nm-token b {
+  font: 500 13px/1.2 "IBM Plex Mono", "SF Mono", ui-monospace, Menlo, monospace;
+}
+
+.nm-token small {
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.nm-bars {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nm-bars li {
+  display: grid;
+  grid-template-columns: minmax(64px, auto) 1fr 46px;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+}
+
+.nm-bar-label {
+  overflow: hidden;
+  color: var(--muted);
+  font-family: "IBM Plex Mono", "SF Mono", ui-monospace, Menlo, monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nm-bar-track {
+  height: 8px;
+  border-radius: 6px;
+  background: var(--nm-raised);
+  overflow: hidden;
+}
+
+.nm-bar-track i {
+  display: block;
+  height: 100%;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--fg) 28%, transparent);
+  transition: width var(--dur) var(--ease-out);
+}
+
+.nm-bar-value {
+  color: var(--muted);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.nm-bars li[data-strong] .nm-bar-label,
+.nm-bars li[data-strong] .nm-bar-value { color: var(--fg); font-weight: 600; }
+.nm-bars li[data-strong] .nm-bar-track i { background: var(--nm-role); }
+
+.nm-stats {
+  display: grid;
+  grid-template-columns: repeat(4, auto);
+  justify-content: start;
+  gap: 4px 18px;
+  margin: 0;
+}
+
+.nm-stats div { display: grid; gap: 1px; }
+.nm-stats dt { color: var(--muted); font-size: 11px; }
+.nm-stats dd { margin: 0; font-variant-numeric: tabular-nums; font-weight: 500; }
+.nm-stats-note { grid-column: 1 / -1; margin: 6px 0 0; color: var(--muted); font-size: 12px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .nm { animation: none; }
+  .nm-bar-track i { transition: none; }
+}
+
+/* Files in the directory card link to their source on GitHub. */
+.cs-tree a.cs-file {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 30%, transparent);
+  text-underline-offset: 3px;
+  transition: text-decoration-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+
+.cs-tree a.cs-file:hover,
+.cs-tree a.cs-file:focus-visible {
+  outline: none;
+  color: var(--fg);
+  text-decoration-color: var(--accent);
+}
