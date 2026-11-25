@@ -1,5 +1,5 @@
 // The title rushes in once on load and settles, then the write-up takes over.
-export const WORDS = ["gpt-2 in racket λ"];
+export const WORDS = ["GPT-2 in Racket λ"];
 
 export const FONT_VAR =
   "-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif";

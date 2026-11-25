@@ -479,7 +479,7 @@ export class RushType {
     ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, c.width, c.height);
 
-    const text = (word || "").trim().toLowerCase();
+    const text = (word || "").trim();
     if (text) {
 
       let size = this.texCap * 1.4;
