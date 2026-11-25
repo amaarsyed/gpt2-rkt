@@ -13,7 +13,6 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "katex": "^0.19.1",
-    "lenis": "^1.3.26",
     "lucide-react": "^1.80.0",
     "radix-ui": "^1.8.1",
     "react": "^19.1.0",

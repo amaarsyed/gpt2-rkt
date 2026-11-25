@@ -1678,14 +1678,15 @@
   --nm-line: color-mix(in srgb, var(--fg) 13%, transparent);
   --nm-role: var(--fg);
   position: absolute;
-  top: 44px;
-  left: 12px;
-  /* Above the canvas, its node labels and tips. */
+  top: 0;
+  left: 0;
+  /* Placed beside the clicked node by NodeMath (the translate property), above the canvas. */
   z-index: 40;
+  visibility: hidden;
   display: flex;
   flex-direction: column;
   width: min(380px, calc(100% - 24px));
-  max-height: calc(100% - 64px);
+  max-height: calc(100% - 24px);
   overflow: hidden;
   border-radius: 14px;
   background: var(--nm-surface);
@@ -1699,6 +1700,8 @@
   transform-origin: top left;
   animation: nm-in var(--dur) var(--ease-out) both;
 }
+
+.nm[data-placed] { visibility: visible; }
 
 @keyframes nm-in {
   from { opacity: 0; transform: translateY(4px) scale(0.97); }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { activeQueryRow, causalRow, tokenText } from '../visualizer/attentionMath';
 import { stageLabel } from '../visualizer/executionState';
 import { executionGraph, nodeById } from '../visualizer/graphModel';
@@ -215,6 +215,43 @@ export function NodeMath({ core }: { core: VizCore }) {
       window.clearTimeout(timer);
     };
   }, [open, setState]);
+
+  // Open beside the clicked node, and follow it while the camera settles: right of the node
+  // when it fits, otherwise left, always inside the visualizer.
+  const nodeId = open ? state.selectedNodeId : null;
+  useLayoutEffect(() => {
+    const el = card.current;
+    if (!nodeId || !el) return;
+    const root = el.closest<HTMLElement>('.sc-viz');
+    if (!root) return;
+    let frame = 0;
+    const place = () => {
+      const hit = root.querySelector<HTMLElement>(`.viz-hit[data-node="${CSS.escape(nodeId)}"]`);
+      const box = root.getBoundingClientRect();
+      const w = el.offsetWidth;
+      const h = el.offsetHeight;
+      const margin = 12;
+      const gap = 22;
+      let ax = box.width / 2;
+      let ay = box.height / 3;
+      if (hit) {
+        const r = hit.getBoundingClientRect();
+        ax = r.left + r.width / 2 - box.left;
+        ay = r.top + r.height / 2 - box.top;
+      }
+      const right = ax + gap + w <= box.width - margin;
+      let x = right ? ax + gap : ax - gap - w;
+      x = Math.min(Math.max(x, margin), Math.max(margin, box.width - w - margin));
+      let y = ay - 28;
+      y = Math.min(Math.max(y, margin), Math.max(margin, box.height - h - margin));
+      el.style.translate = `${Math.round(x)}px ${Math.round(y)}px`;
+      el.style.transformOrigin = `${right ? 'left' : 'right'} ${Math.round(Math.min(Math.max(ay - y, 0), h))}px`;
+      el.dataset.placed = '';
+      frame = requestAnimationFrame(place);
+    };
+    place();
+    return () => cancelAnimationFrame(frame);
+  }, [nodeId]);
 
   if (!open || !state.selectedNodeId) return null;
   const node = nodeById(executionGraph(), state.selectedNodeId);
