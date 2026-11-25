@@ -10,7 +10,6 @@ import { Tex } from './scrolly/Tex';
 import { RktTerm } from './scrolly/RktTerm';
 
 const REPO = 'https://github.com/amaarsyed/gpt2-rkt';
-const BENCHMARKS = `${REPO}/blob/main/docs/BENCHMARKS.md`;
 
 /** The authors' sites. This page lives in the gpt2-rkt repository; both sites link to it. */
 /**
@@ -311,15 +310,12 @@ export function Writeup() {
               <h2>Read the code</h2>
               <p className="wu-links">
                 <SourcePill />
-                <a href="#benchmarks">M5 Pro results</a>
-                <a href={BENCHMARKS} target="_blank" rel="noopener noreferrer">
-                  Earlier runs
-                </a>
               </p>
               <p className="wu-pair">
                 This write-up is shared between our sites. Find it under{' '}
                 <a href={AUTHORS.abdullah.href}>Abdullah's projects</a> and <a href={AUTHORS.amaar.href}>Amaar's builds</a>.
               </p>
+              <p>We hope you had as much fun reading this as we did making it!</p>
             </footer>
           </Reveal>
           </Step>
