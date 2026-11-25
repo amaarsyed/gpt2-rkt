@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Writeup } from './components/gpt2-rkt/Writeup';
+import { shouldPlayStartup, StartupIntro } from './components/StartupIntro';
 import { playPop } from './lib/audio';
 import './index.css';
 import './components/iso/iso.css';
@@ -14,10 +15,16 @@ document.addEventListener('pointerdown', (e) => {
   if (target.closest('a, button')) playPop();
 });
 
+// The title intro, once per session. Before the first paint, so the page's entrance
+// animations wait underneath from the start.
+const playStartup = shouldPlayStartup();
+if (playStartup) document.documentElement.classList.add('is-intro');
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     {/* Native scrolling: smooth on every device, with nothing in JavaScript between the
         wheel or finger and the page. */}
     <Writeup />
+    {playStartup && <StartupIntro />}
   </StrictMode>,
 );
