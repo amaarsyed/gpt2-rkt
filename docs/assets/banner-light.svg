@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="400" viewBox="0 0 1280 400" role="img" aria-label="gpt2-rkt: GPT-2 small, in pure Racket">
+  <rect width="1280" height="400" fill="#faf9f7"/>
+  <g stroke="#e4e0d8" stroke-width="1">
+    <path d="M0 80H1280M0 160H1280M0 240H1280M0 320H1280"/>
+    <path d="M160 0V400M320 0V400M480 0V400M640 0V400M800 0V400M960 0V400M1120 0V400"/>
+  </g>
+  <g fill="none" stroke-width="2">
+    <path d="M700 300 C 820 300, 860 120, 980 120" stroke="#f5c400"/>
+    <path d="M980 120 C 1060 120, 1080 220, 1160 220" stroke="#6b9bff"/>
+    <path d="M760 220 C 860 220, 900 300, 1060 300" stroke="#e5484d" opacity="0.85"/>
+    <path d="M820 160 C 900 160, 960 250, 1100 250" stroke="#3fb37f" opacity="0.85"/>
+  </g>
+  <g>
+    <circle cx="700" cy="300" r="9" fill="#1c1b19"/><circle cx="700" cy="300" r="3.5" fill="#faf9f7"/>
+    <circle cx="980" cy="120" r="9" fill="#f5c400"/><circle cx="980" cy="120" r="3.5" fill="#faf9f7"/>
+    <circle cx="1160" cy="220" r="9" fill="#6b9bff"/><circle cx="1160" cy="220" r="3.5" fill="#faf9f7"/>
+    <circle cx="1060" cy="300" r="9" fill="#e5484d"/><circle cx="1060" cy="300" r="3.5" fill="#faf9f7"/>
+    <circle cx="1100" cy="250" r="9" fill="#3fb37f"/><circle cx="1100" cy="250" r="3.5" fill="#faf9f7"/>
+  </g>
+  <text x="96" y="214" fill="#1c1b19" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="84" font-weight="500" letter-spacing="-2.5">GPT-2 in Racket <tspan fill="#f5c400">λ</tspan></text>
+  <text x="100" y="268" fill="#726f68" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="26">124M parameters · pure Racket · no BLAS, no FFI</text>
+</svg>
