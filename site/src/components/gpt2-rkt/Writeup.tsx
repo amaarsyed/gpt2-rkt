@@ -13,6 +13,30 @@ const REPO = 'https://github.com/amaarsyed/gpt2-rkt';
 const BENCHMARKS = `${REPO}/blob/main/docs/BENCHMARKS.md`;
 
 /** The authors' sites. This page lives in the gpt2-rkt repository; both sites link to it. */
+/**
+ * Which author's site the reader came from, so "← back" returns there. The link from
+ * each site adds ?from=amaar or ?from=abdullah; otherwise the referrer decides. It is
+ * kept for the session, so a refresh or an in-page jump doesn't lose it. Unknown: Amaar.
+ */
+function cameFrom(): keyof typeof AUTHORS {
+  const KEY = 'gpt2-rkt-from';
+  try {
+    const asked = new URLSearchParams(window.location.search).get('from');
+    if (asked === 'amaar' || asked === 'abdullah') {
+      window.sessionStorage.setItem(KEY, asked);
+      return asked;
+    }
+    const host = document.referrer ? new URL(document.referrer).hostname : '';
+    if (host.includes('abdullah')) { window.sessionStorage.setItem(KEY, 'abdullah'); return 'abdullah'; }
+    if (host.startsWith('portfolio-v01')) { window.sessionStorage.setItem(KEY, 'amaar'); return 'amaar'; }
+    const kept = window.sessionStorage.getItem(KEY);
+    if (kept === 'amaar' || kept === 'abdullah') return kept;
+  } catch {
+    // Storage or a malformed referrer: fall through to the default.
+  }
+  return 'amaar';
+}
+
 export const AUTHORS = {
   abdullah: { name: 'abdullah', href: 'https://abdullahehsan.vercel.app/projects' },
   amaar: { name: 'amaar', href: 'https://portfolio-v01-amber.vercel.app/#builds' },
@@ -118,11 +142,14 @@ export function Writeup() {
     setDark(next);
   };
 
+  const [from] = useState(cameFrom);
+  const back = { href: AUTHORS[from].href, label: from === 'abdullah' ? 'Abdullah' : 'Amaar' };
+
   return (
     <div className="wu-root iso is-scrolly" data-theme={theme}>
       <nav className="wu-nav" aria-label="Site">
-        <a href="https://portfolio-v01-amber.vercel.app/#builds" className="wu-back">
-          <span aria-hidden="true">←</span> Amaar
+        <a href={back.href} className="wu-back">
+          <span aria-hidden="true">←</span> {back.label}
         </a>
         <button
           type="button"
