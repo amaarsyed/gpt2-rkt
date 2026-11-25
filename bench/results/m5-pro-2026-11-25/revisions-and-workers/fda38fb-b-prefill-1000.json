@@ -1,0 +1,1 @@
+{"ids":[7454],"median_ms":4043.898000000001,"new_tokens":1,"peak_bytes":2256232888,"pid":84309,"prompt_tokens":1000,"samples_allocated_bytes":[1555247680,1555288688,1555038672],"samples_gc_ms":[88,60,77],"samples_ms":[4127.541,3974.9230000000007,4043.898000000001]}
