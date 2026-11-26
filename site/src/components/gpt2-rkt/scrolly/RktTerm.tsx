@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { HoverCard } from 'radix-ui';
 import { RACKET_COMMIT } from '../visualizer/racketSource';
 import { RKT } from './snippets';
@@ -17,6 +17,12 @@ export function RktTerm({ file, children }: { file: keyof typeof RKT; children: 
     setOpenState(next);
     point(next ? `mod-${file}` : null);
   };
+  // Touch has no hover: the first tap previews the file and a second tap closes it (a tap
+  // anywhere else closes it too, via the card's own dismiss). The card carries the GitHub link.
+  // Radix closes the card on pointerdown before the click lands, so the click goes by
+  // whether it was open when the finger came down.
+  const touched = useRef(false);
+  const wasOpen = useRef(false);
   if (!entry) return <>{children}</>;
   const { chunks } = entry.snippet;
   const first = chunks[0]?.start ?? 1;
@@ -32,7 +38,16 @@ export function RktTerm({ file, children }: { file: keyof typeof RKT; children: 
           target="_blank"
           rel="noopener noreferrer"
           data-no-pop=""
-          onFocus={() => setOpen(true)}
+          onPointerDown={(event) => {
+            touched.current = event.pointerType === 'touch';
+            wasOpen.current = open;
+          }}
+          onClick={(event) => {
+            if (!touched.current) return;
+            event.preventDefault();
+            setOpen(!wasOpen.current);
+          }}
+          onFocus={() => { if (!touched.current) setOpen(true); }}
           onBlur={() => setOpen(false)}
           onKeyDown={(event) => { if (event.key === 'Escape') setOpen(false); }}
         >
@@ -43,6 +58,9 @@ export function RktTerm({ file, children }: { file: keyof typeof RKT; children: 
         <HoverCard.Content className="rkt-card" side="top" align="start" sideOffset={10} collisionPadding={16}>
           <p className="rkt-card-file">{entry.file}</p>
           <p className="rkt-card-what">{entry.what}</p>
+          <a className="rkt-card-open" href={href} target="_blank" rel="noopener noreferrer">
+            Open on GitHub ↗
+          </a>
           <HoverCard.Arrow className="rkt-card-arrow" width={14} height={7} />
         </HoverCard.Content>
       </HoverCard.Portal>

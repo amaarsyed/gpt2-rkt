@@ -1,4 +1,4 @@
-import { useEffect, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
@@ -74,16 +74,68 @@ export function Tex({ children, block = false }: { children: string; block?: boo
     return () => window.removeEventListener('scroll', hide);
   }, [tip]);
 
-  const onOver = (event: ReactPointerEvent<HTMLElement>) => {
-    const el = (event.target as HTMLElement).closest<HTMLElement>('[data-sym]');
+  const root = useRef<HTMLElement | null>(null);
+  // Touch has no hover: a tap opens a symbol's tip, a second tap or a tap elsewhere closes it.
+  const touched = useRef(false);
+
+  const tipFor = (target: EventTarget | null) => {
+    const el = (target as HTMLElement | null)?.closest<HTMLElement>('[data-sym]');
     const key = el?.dataset.sym;
-    if (!el || !key || !GLOSSARY[key]) { setTip(null); return; }
+    if (!el || !key || !GLOSSARY[key]) return null;
     const box = el.getBoundingClientRect();
     // Keep the tip (up to 340px wide, centered on the symbol) inside the window.
     const half = Math.min(170, window.innerWidth / 2 - 12);
     const x = Math.min(Math.max(box.left + box.width / 2, half + 12), window.innerWidth - half - 12);
-    setTip({ key, x, y: box.top });
+    return { key, x, y: box.top };
   };
+
+  const onOver = (event: ReactPointerEvent<HTMLElement>) => {
+    if (event.pointerType === 'touch') return;
+    setTip(tipFor(event.target));
+  };
+
+  const onLeave = (event: ReactPointerEvent<HTMLElement>) => {
+    if (event.pointerType !== 'touch') setTip(null);
+  };
+
+  const onDown = (event: ReactPointerEvent<HTMLElement>) => {
+    touched.current = event.pointerType === 'touch';
+  };
+
+  const onTap = (event: ReactMouseEvent<HTMLElement>) => {
+    if (!touched.current) return;
+    const next = tipFor(event.target);
+    setTip((current) => (next && current?.key !== next.key ? next : null));
+  };
+
+  // A tap anywhere outside this equation closes its tip.
+  useEffect(() => {
+    if (!tip) return;
+    const away = (event: PointerEvent) => {
+      if (!root.current?.contains(event.target as Node)) setTip(null);
+    };
+    document.addEventListener('pointerdown', away, true);
+    return () => document.removeEventListener('pointerdown', away, true);
+  }, [tip]);
+
+  // A display equation wider than the column scrolls sideways; flag it so the edge can fade.
+  useEffect(() => {
+    const el = root.current;
+    if (!block || !el) return;
+    const check = () => {
+      // Only while there is more to the right: scrolled to the end, the edge is solid.
+      if (el.scrollLeft + el.clientWidth < el.scrollWidth - 1) el.dataset.overflow = '';
+      else delete el.dataset.overflow;
+    };
+    check();
+    const sizes = new ResizeObserver(check);
+    sizes.observe(el);
+    el.addEventListener('scroll', check, { passive: true });
+    return () => {
+      sizes.disconnect();
+      el.removeEventListener('scroll', check);
+    };
+  }, [block, html]);
 
   const entry = tip ? GLOSSARY[tip.key] : null;
   return (
@@ -91,8 +143,11 @@ export function Tex({ children, block = false }: { children: string; block?: boo
       <Tag
         className={block ? 'tex-block' : 'tex-inline'}
         data-active-sym={tip?.key}
+        ref={(el: HTMLElement | null) => { root.current = el; }}
         onPointerOver={onOver}
-        onPointerLeave={() => setTip(null)}
+        onPointerLeave={onLeave}
+        onPointerDown={onDown}
+        onClick={onTap}
         dangerouslySetInnerHTML={{ __html: html }}
       />
       {tip && entry

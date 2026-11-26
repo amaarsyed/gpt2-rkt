@@ -737,11 +737,18 @@ export function createExecutionCanvas(canvas: HTMLCanvasElement, hooks: CanvasHo
       context.arc(x, y, radius * 0.38, 0, Math.PI * 2);
       context.fill();
     }
+    // On a phone-width canvas the file labels crowd the stage labels, so a file
+    // keeps its dot and only names itself while it is the one in play.
+    const narrow = width < 520;
+    if (narrow && node.role === 'module' && !selected && !linked && !(hot && hot.has(node.id))) {
+      context.restore();
+      return;
+    }
     const label = node.label;
     const labelX = x;
     const labelY = y + radius + 6 * unit;
     context.globalAlpha = dim ? 0.88 : 1;
-    context.font = screenFont(node.role === 'module' ? 560 : 620, node.role === 'module' ? 12 : 14, camera.k, 13);
+    context.font = screenFont(node.role === 'module' ? 560 : 620, node.role === 'module' ? 12 : 14, camera.k, narrow ? 10.5 : 13);
     context.textAlign = 'center';
     context.textBaseline = 'top';
     context.lineJoin = 'round';

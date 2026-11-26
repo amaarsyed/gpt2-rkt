@@ -30,7 +30,7 @@
 }
 
 /* Room on the right for the mercury rail, which sits at the window edge. */
-@media (min-width: 1100px) {
+@media (min-width: 1100px), (min-width: 900px) and (orientation: landscape) {
   .wu-root.is-scrolly .wu-main {
     padding-right: max(var(--wu-gutter), 60px);
   }
@@ -82,7 +82,7 @@
   transform: scaleY(1);
 }
 
-@media (min-width: 1100px) {
+@media (min-width: 1100px), (min-width: 900px) and (orientation: landscape) {
   .sc-grid .wu-step:not([data-active]) {
     opacity: 0.72;
   }
@@ -678,14 +678,18 @@
 
 /* ---------- narrower screens ---------- */
 
-@media (max-width: 1099px) {
+@media (max-width: 1099px) and (orientation: portrait), (max-width: 899px) {
+  /* stretch, not the grid's start: otherwise the column sizes to its content (760px)
+     instead of the screen and the text runs off the right edge. */
   .sc-grid {
     display: flex;
     flex-direction: column-reverse;
+    align-items: stretch;
     gap: 24px;
   }
 
   .sc-text {
+    width: 100%;
     max-width: var(--wu-column);
     margin-inline: auto;
     padding-right: 0;
@@ -700,10 +704,19 @@
     background: var(--bg);
   }
 
+  .sc-stage {
+    padding-top: calc(6px + env(safe-area-inset-top));
+  }
+
   .sc-viz {
-    height: 44vh;
-    min-height: 260px;
+    height: 38dvh;
+    min-height: 240px;
     flex: none;
+  }
+
+  /* The minimap rail has no room beside a stacked page. */
+  .wu-root .sc-toc {
+    display: none;
   }
 
   .sc-chips,
@@ -740,9 +753,10 @@
 }
 
 @media (max-width: 560px) {
+  /* Taller than the share alone would give: the legend takes its own row up here. */
   .sc-viz {
-    height: 36vh;
-    min-height: 220px;
+    height: 38dvh;
+    min-height: 230px;
   }
 
   .sc-says {
@@ -771,6 +785,40 @@
 
   .sc-dock-transport {
     flex-wrap: wrap;
+  }
+
+  .wu-root .sc-toc {
+    display: none;
+  }
+}
+
+/* A phone held sideways: a sticky stage would leave ~100px to read in, so it scrolls away. */
+@media (max-height: 500px) and (orientation: landscape) and (max-width: 1099px) {
+  .sc-grid {
+    display: flex;
+    flex-direction: column-reverse;
+    align-items: stretch;
+    gap: 24px;
+  }
+
+  .sc-text {
+    width: 100%;
+    max-width: var(--wu-column);
+    margin-inline: auto;
+  }
+
+  .sc-stage {
+    position: relative;
+    top: 0;
+    width: 100%;
+    height: auto;
+    padding-inline: env(safe-area-inset-left) env(safe-area-inset-right);
+  }
+
+  .sc-viz {
+    height: 70dvh;
+    min-height: 220px;
+    flex: none;
   }
 
   .wu-root .sc-toc {
@@ -870,7 +918,7 @@
   padding-left: 24px;
 }
 
-@media (min-width: 1100px) {
+@media (min-width: 1100px), (min-width: 900px) and (orientation: landscape) {
   .sc-grid {
     grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
   }
@@ -1471,7 +1519,7 @@
 
 /* The write-up's type scale. Six sizes, set directly rather than by zooming the column:
    11 labels · 13 notes and tables · 15 byline and end card · 16.5 body · 18 deck and lede · 31 headings. */
-@media (min-width: 1100px) {
+@media (min-width: 1100px), (min-width: 900px) and (orientation: landscape) {
   .wu-root.is-scrolly .sc-text { font-size: 16.5px; }
   .wu-root.is-scrolly .wu-header h1 { font-size: clamp(34px, 5.6vw, 50px); }
   .wu-root.is-scrolly .wu-main .wu-deck,
@@ -1911,4 +1959,165 @@
   outline: none;
   color: var(--fg);
   text-decoration-color: var(--accent);
+}
+
+/* ---------- a narrow stage: the header ---------- */
+
+/* Sized by the stage, not the screen: the legend and the play controls share one row
+   only when the stage is wide enough for both (desktop), on any device. */
+/* On the visualizer, not the whole stage: a container is also the frame for fixed
+   children, and the node card's phone sheet (outside .viz) must stay fixed to the screen. */
+.sc-viz > .viz {
+  container: sc-stage / inline-size;
+}
+
+@container sc-stage (max-width: 680px) {
+  /* The play controls sit top-right; the legend gets its own row beneath them. */
+  .sc-viz .viz-legend {
+    flex-wrap: wrap;
+    gap: 4px 16px;
+    padding-top: 36px;
+  }
+}
+
+@media (max-width: 560px) {
+  .sc-viz .viz-legend {
+    gap: 4px 14px;
+    padding-inline: 12px;
+    padding-bottom: 2px;
+    font-size: 9.5px;
+    letter-spacing: 0.04em;
+  }
+
+  .sc-viz .viz-legend span {
+    gap: 6px;
+    height: 18px;
+  }
+
+  .sc-viz .viz-legend i {
+    width: 7px;
+    height: 7px;
+  }
+
+  .sc-transport .sc-transport-label {
+    display: none;
+  }
+
+}
+
+/* ---------- touch screens ---------- */
+
+@media (hover: none) and (pointer: coarse) {
+  .sc-transport {
+    height: 40px;
+  }
+
+  .sc-transport .sc-transport-btn,
+  .sc-transport .sc-transport-main,
+  .sc-transport .sc-transport-speed {
+    width: 40px;
+    height: 40px;
+  }
+
+  /* No pointer to hover with: the "explains itself" hint is the dotted underline alone. */
+  .tex-block [data-sym],
+  .tex-inline [data-sym] {
+    cursor: default;
+  }
+}
+
+@media (pointer: coarse) {
+  @container sc-stage (max-width: 680px) {
+    .sc-viz .viz-legend {
+      padding-top: 42px;
+    }
+  }
+}
+
+/* A display equation that runs past the column fades at its right edge, a sign it scrolls. */
+.wu-main .tex-block[data-overflow] {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  padding-right: 20px;
+}
+
+@media (max-width: 560px) {
+  .wu-main .tex-block {
+    font-size: 0.95em;
+  }
+}
+
+/* The GitHub link inside a file preview: only on touch, where the term itself previews. */
+.rkt-card-open {
+  display: none;
+}
+
+@media (hover: none) {
+  .rkt-card-open {
+    display: inline-block;
+    margin-top: 8px;
+    color: var(--rk-fg, #f2f0ea);
+    font: 500 12px/1 var(--sc-mono, ui-monospace, monospace);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+}
+
+/* ---------- phones: a clicked node's card is a bottom sheet ---------- */
+
+@media (max-width: 560px) {
+  .nm {
+    position: fixed;
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: auto;
+    max-height: 62dvh;
+    padding-bottom: env(safe-area-inset-bottom);
+    border-radius: 18px 18px 0 0;
+    transform-origin: bottom center;
+    animation-name: nm-sheet-in;
+  }
+
+  /* The grab handle: shows it is a sheet over the page. */
+  .nm::before {
+    content: '';
+    align-self: center;
+    flex: none;
+    width: 36px;
+    height: 4px;
+    margin-top: 8px;
+    border-radius: 2px;
+    background: color-mix(in srgb, var(--fg) 22%, transparent);
+  }
+
+  .nm-body {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .nm-close {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+@keyframes nm-sheet-in {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (max-width: 560px) {
+  /* The sheet covers the bottom of the screen, where the "back to the text" pill sits. */
+  .wu-root:has(.nm) .sc-return {
+    display: none;
+  }
+}
+
+/* The trace's id and commit: for the record. On a stacked page it lands on the graph. */
+@media (max-width: 1099px) and (orientation: portrait), (max-width: 899px) {
+  .sc-viz .viz-status {
+    display: none;
+  }
 }

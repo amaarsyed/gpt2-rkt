@@ -5,6 +5,9 @@ import { executionGraph, nodeById } from '../visualizer/graphModel';
 import { isStageId, type ExecutionTrace, type StageId, type TensorSummary } from '../visualizer/traceTypes';
 import type { VizCore } from '../visualizer/useVizCore';
 import { RKT } from './snippets';
+
+/** Below this width the node card opens as a bottom sheet instead of beside the node. */
+const SHEET = '(max-width: 560px)';
 import { Tex } from './Tex';
 
 /** What each stage does, said plainly, and the one equation that says it exactly. */
@@ -224,6 +227,12 @@ export function NodeMath({ core }: { core: VizCore }) {
     if (!nodeId || !el) return;
     const root = el.closest<HTMLElement>('.sc-viz');
     if (!root) return;
+    // On a phone the card is a bottom sheet (scrolly.css): no placing beside the node.
+    if (window.matchMedia(SHEET).matches) {
+      el.style.translate = '';
+      el.dataset.placed = '';
+      return;
+    }
     let frame = 0;
     const place = () => {
       const hit = root.querySelector<HTMLElement>(`.viz-hit[data-node="${CSS.escape(nodeId)}"]`);
