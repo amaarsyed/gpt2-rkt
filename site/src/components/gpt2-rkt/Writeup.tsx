@@ -200,11 +200,11 @@ export function Writeup() {
               matrix products split across CPU cores. On an Apple M5 Pro it generates <strong>about 34 tokens per second</strong>.
             </div>
             <p className="wu-lede">
-              We started this after a{' '}
+              This began as a daydream in a{' '}
               <a href="https://student.cs.uwaterloo.ca/~cs145/" target="_blank" rel="noopener noreferrer">
                 CS145
               </a>{' '}
-              lecture.
+              lecture: what if LLM inference were written in Racket?
             </p>
             <CodeStack cardId="tree" />
           </Reveal>
