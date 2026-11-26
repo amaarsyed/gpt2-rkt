@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Network, X } from 'lucide-react';
 import { MercuryMinimap } from '@/components/ui/toc-minimap-mercury';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { stillness } from '../figures/shared';
@@ -19,6 +20,7 @@ type Driver = 'paper' | 'free';
 
 const ExecutionVisualizer = lazy(() => import('../visualizer/ExecutionVisualizer'));
 const STEP_IDS = Object.keys(SCENES) as StepId[];
+const STAGE_KEY = 'gpt2rkt:stage';
 
 /**
  * The write-up on the left, the hero visualizer pinned on the right.
@@ -33,6 +35,18 @@ export function ScrollyLayout({ theme, children }: { theme: string; children: Re
   const active = tracker.active;
   const scene: StepScene = SCENES[active];
   const following = driver === 'paper';
+
+  // On a stacked page (phones, portrait tablets) the visualizer sits behind a toggle, so the
+  // text gets the screen. Closed by default; the choice holds for the visit. Wider screens
+  // always show it side by side, and the CSS hides the toggle there.
+  const [showStage, setShowStage] = useState(() => {
+    try { return sessionStorage.getItem(STAGE_KEY) === 'open'; } catch { return false; }
+  });
+  const toggleStage = () => setShowStage((open) => {
+    const next = !open;
+    try { sessionStorage.setItem(STAGE_KEY, next ? 'open' : 'closed'); } catch { /* private mode */ }
+    return next;
+  });
 
   // A .rkt term hovered in the text points the graph at its module node.
   const [termFocus, setTermFocus] = useState<string | null>(null);
@@ -158,7 +172,7 @@ export function ScrollyLayout({ theme, children }: { theme: string; children: Re
     <TooltipProvider delayDuration={250}>
       <TermFocusContext.Provider value={setTermFocus}>
       <StepProvider value={tracker}>
-        <div className="sc-grid" data-driver={driver}>
+        <div className="sc-grid" data-driver={driver} data-stage={showStage ? 'open' : 'closed'}>
           <div className="sc-text">
             {children}
           </div>
@@ -202,6 +216,16 @@ export function ScrollyLayout({ theme, children }: { theme: string; children: Re
         </div>
 
         <MercuryMinimap sections={TOC} className="sc-toc" />
+
+        <button
+          type="button"
+          className="sc-stage-toggle"
+          aria-pressed={showStage}
+          onClick={toggleStage}
+        >
+          {showStage ? <X size={14} aria-hidden="true" /> : <Network size={14} aria-hidden="true" />}
+          {showStage ? 'Hide visualizer' : 'Visualizer'}
+        </button>
 
         {following ? null : (
           <button type="button" className="sc-return" onClick={follow}>

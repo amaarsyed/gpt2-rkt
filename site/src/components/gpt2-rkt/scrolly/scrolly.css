@@ -753,10 +753,10 @@
 }
 
 @media (max-width: 560px) {
-  /* Taller than the share alone would give: the legend takes its own row up here. */
+  /* Opened on purpose, and the legend and the sentence each take a row: room for the graph. */
   .sc-viz {
-    height: 38dvh;
-    min-height: 230px;
+    height: 44dvh;
+    min-height: 260px;
   }
 
   .sc-says {
@@ -2115,9 +2115,77 @@
   }
 }
 
-/* The trace's id and commit: for the record. On a stacked page it lands on the graph. */
-@media (max-width: 1099px) and (orientation: portrait), (max-width: 899px) {
-  .sc-viz .viz-status {
+/* ---------- stacked pages: the visualizer behind a toggle, the sentence under it ---------- */
+
+.sc-stage-toggle {
+  display: none;
+}
+
+@media (max-width: 1099px) and (orientation: portrait), (max-width: 899px), (max-height: 500px) and (orientation: landscape) and (max-width: 1099px) {
+  .sc-grid[data-stage='closed'] .sc-stage {
+    display: none;
+  }
+
+  .sc-stage-toggle {
+    position: fixed;
+    right: calc(var(--wu-gutter) + env(safe-area-inset-right, 0px));
+    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    z-index: 32;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 40px;
+    padding: 0 16px 0 14px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--fg);
+    color: var(--bg);
+    box-shadow: 0 8px 24px -10px rgba(0, 0, 0, 0.5);
+    font: 500 13px/1 var(--sc-ui);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    animation: sc-note-in var(--dur) var(--ease-out) both;
+  }
+
+  /* The "back to the text" pill rides above the toggle instead of beside it. */
+  .sc-return {
+    bottom: calc(70px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .sc-stage-toggle:active {
+    transform: scale(0.97);
+  }
+
+  .sc-stage-toggle svg {
+    color: var(--accent);
+  }
+
+  /* The sentence gets its own strip under the graph instead of lying over it. */
+  .sc-viz > .viz {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .sc-viz .viz-bottom {
+    position: static;
+    flex: none;
+    padding: 6px 10px 8px;
+    border-top: 1px solid var(--sc-hair);
+  }
+
+  .wu-main .sc-viz .viz-sentence {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    margin: 0 auto;
+    text-align: center;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  /* The sheet covers the bottom of the screen, where the toggle sits. */
+  .wu-root:has(.nm) .sc-stage-toggle {
     display: none;
   }
 }
