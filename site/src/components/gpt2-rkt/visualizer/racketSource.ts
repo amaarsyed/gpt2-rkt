@@ -1,6 +1,6 @@
 import type { StageId } from './traceTypes';
 
-/** Verbatim Racket from gpt2-rkt @ 75286c5918a303582b7ce99b5378a2dba47ba5c8. Do not edit by hand. */
+/** Verbatim Racket from gpt2-rkt @ ae29f0007eda76012ed772be4e54b18ecbf56939. Do not edit by hand. */
 
 export interface RacketExcerpt {
   file: string;
@@ -13,7 +13,7 @@ export interface RacketExcerpt {
   code: string;
 }
 
-export const RACKET_COMMIT = "75286c5918a303582b7ce99b5378a2dba47ba5c8";
+export const RACKET_COMMIT = "ae29f0007eda76012ed772be4e54b18ecbf56939";
 
 export const RACKET_EXCERPTS: Record<StageId, RacketExcerpt> = {
   "bpe-merge": {

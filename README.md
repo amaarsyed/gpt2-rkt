@@ -123,7 +123,7 @@ Medians of three runs, each in a fresh process after one warmup. Greedy runs inc
 | **Greedy, 128 new tokens** | **34.3 tok/s** | **28.0 tok/s** |
 | Matrix product 768 × 768 × 768 | 12.6 ms | 30.7 ms |
 
-- **Apple M5 Pro** (6 performance and 12 efficiency cores, Racket 9.3 CS), measured on 25 November 2026 at `780d96d`. The raw results, plus the revision comparison and the worker sweep, are in [`bench/results/m5-pro-2026-11-25/`](bench/results/m5-pro-2026-11-25). The M5 run recorded the matrix product as 71.9 GFLOP/s, which is 12.6 ms for its 906 million floating-point operations.
+- **Apple M5 Pro** (6 performance and 12 efficiency cores, Racket 9.3 CS), measured on 25 November 2026 at `5e062f8`. The raw results, plus the revision comparison and the worker sweep, are in [`bench/results/m5-pro-2026-11-25/`](bench/results/m5-pro-2026-11-25). The M5 run recorded the matrix product as 71.9 GFLOP/s, which is 12.6 ms for its 906 million floating-point operations.
 - **Ryzen 5 8645HS** (12 logical processors, Windows, Racket CS 9.3), measured on 17 November 2026 on the current engine.
 
 The full tables, the earlier comparisons, and what the counters mean are in [Benchmarks](docs/BENCHMARKS.md). To record your own machine, run `sh bench/run.sh`. Leave it idle for five minutes or more.

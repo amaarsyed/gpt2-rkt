@@ -24,7 +24,7 @@ export function stageSnippet(...stages: StageId[]): Snippet {
   };
 }
 
-/** Verbatim from gpt2-rkt src/nn.rkt @ 75286c5918a303582b7ce99b5378a2dba47ba5c8. */
+/** Verbatim from gpt2-rkt src/nn.rkt @ ae29f0007eda76012ed772be4e54b18ecbf56939. */
 export const PARALLEL_SNIPPET: Snippet = {
   file: 'src/nn.rkt',
   chunks: [
@@ -83,7 +83,7 @@ export interface RktFile {
   snippet: Snippet;
 }
 
-/** Verbatim lines from gpt2-rkt @ 75286c5918a303582b7ce99b5378a2dba47ba5c8. */
+/** Verbatim lines from gpt2-rkt @ ae29f0007eda76012ed772be4e54b18ecbf56939. */
 export const RKT: Record<string, RktFile> = {
   tokenizer: {
     file: 'tokenizer.rkt',

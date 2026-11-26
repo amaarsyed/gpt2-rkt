@@ -33,7 +33,7 @@ Greedy continuation of `Once upon a time`, 16 tokens:
 
 ## This tree, Windows laptop
 
-AMD Ryzen 5 8645HS, 12 logical processors, Racket CS 9.3, measured at `8ed5dc6`. Comments in the sources changed after that commit. The engine did not. The right-hand column of the comparison in [Benchmarks](BENCHMARKS.md) is this run. Medians of three samples:
+AMD Ryzen 5 8645HS, 12 logical processors, Racket CS 9.3, measured at `c73c2df`. Comments in the sources changed after that commit. The engine did not. The right-hand column of the comparison in [Benchmarks](BENCHMARKS.md) is this run. Medians of three samples:
 
 | Workload | Median |
 | --- | ---: |
@@ -47,7 +47,7 @@ Generation includes the four-token prompt. Sampling is temperature 0.8, top-k 40
 
 ## Cloud VM, earlier revision
 
-Intel Xeon, 4 logical processors, Racket CS 9.3. This is the tree at `3e6a0ef`, which is before the cache and attention changes above. The result file records git `14746964b28ee2deb1c387745a45618207fd2fcd`. That commit is the same tree. `hw.perflevel0.physicalcpu` and `hw.ncpu` were unavailable on that host.
+Intel Xeon, 4 logical processors, Racket CS 9.3. This is the tree at `844d4a3`, which is before the cache and attention changes above. The result file records git `14746964b28ee2deb1c387745a45618207fd2fcd`. That commit is the same tree. `hw.perflevel0.physicalcpu` and `hw.ncpu` were unavailable on that host.
 
 The prompt is `Once upon a time`. Decoding is greedy. One warmup is discarded. The table is the median of three runs. Each row is a separate process, so the peak is that configuration's high-water mark from `current-memory-use`. Load, prefill, and decode peaks include loading the weights, and that peak still includes the weight-file buffer. The resident size after a collection in the load measurement is 1,085,651,056 bytes. The first 16 decoded ids match the greedy fixture, and the run produced 128 ids.
 
@@ -74,4 +74,4 @@ The committed file is `bench/results/vm-reference-2026-11-17.md`. Do not read 9.
 - `attn.bias` and `attn.masked_bias` are skipped. The causal mask is computed.
 - Key and value buffers are mutated in place. A cache handle that has been advanced cannot be passed again.
 - `load-model` checks names and shapes. The digest check is the fetch script and `check-file-sha256`.
-- The speed and memory numbers in this note are the Windows laptop run of this tree and the cloud VM run of `3e6a0ef`. There is no M5 Pro result in the repository.
+- The speed and memory numbers in this note are the Windows laptop run of this tree and the cloud VM run of `844d4a3`. There is no M5 Pro result in the repository.

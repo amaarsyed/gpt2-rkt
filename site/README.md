@@ -13,4 +13,4 @@ npm run build     # static files in site/dist
 
 It is a static Vite + React app. Any static host works. On Vercel, set the project's root directory to `site`.
 
-The code excerpts on the page are pinned to commit `75286c5`. The benchmark figures are from runs on an Apple M5 Pro on 25 November 2026.
+The code excerpts on the page are pinned to commit `ae29f00`. The benchmark figures are from runs on an Apple M5 Pro on 25 November 2026.

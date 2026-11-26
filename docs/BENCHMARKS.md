@@ -9,7 +9,7 @@ Allocated megabytes are cumulative bytes allocated during the timed call, with 1
 ## Apple M5 Pro
 
 Apple M5 Pro, 6 performance and 12 efficiency cores, Racket 9.3 CS (Homebrew `minimal-racket`), on AC power, 2026-11-25.
-- **Main suite:** `sh bench/run.sh` at `780d96d`. Each row is a fresh process, one warmup, then the median of three. Greedy decoding includes the four-token prompt. Peak memory in each process, including the loaded weights, was about 2.25 GB.
+- **Main suite:** `sh bench/run.sh` at `5e062f8`. Each row is a fresh process, one warmup, then the median of three. Greedy decoding includes the four-token prompt. Peak memory in each process, including the loaded weights, was about 2.25 GB.
 
 | Workload | Median |
 | --- | ---: |
@@ -27,12 +27,12 @@ Apple M5 Pro, 6 performance and 12 efficiency cores, Racket 9.3 CS (Homebrew `mi
 
 | Revision | Prefill 1000 | Allocated | Greedy 128 |
 | --- | ---: | ---: | ---: |
-| `1ad7035` | 5.59 s | 4,594 MB | 7.15 s |
-| `e8af302` | 3.99 s | 1,555 MB | 4.16 s |
-| `fda38fb` | 4.05 s | 1,555 MB | 4.18 s |
-| `8ed5dc6` | 3.83 s | 1,337 MB | 3.84 s |
+| `7d507ff` | 5.59 s | 4,594 MB | 7.15 s |
+| `0d8bcaf` | 3.99 s | 1,555 MB | 4.16 s |
+| `9c7411c` | 4.05 s | 1,555 MB | 4.18 s |
+| `c73c2df` | 3.83 s | 1,337 MB | 3.84 s |
 
-- **Worker sweep:** on `8ed5dc6`, with the same budget for decode and prefill workers. Decoding is fastest at 12 workers, not 18. One plausible reason is that single-row products then also wait on the efficiency cores. That was not measured.
+- **Worker sweep:** on `c73c2df`, with the same budget for decode and prefill workers. Decoding is fastest at 12 workers, not 18. One plausible reason is that single-row products then also wait on the efficiency cores. That was not measured.
 
 | Matrix workers | Prefill 128 | Greedy 128 |
 | ---: | ---: | ---: |
@@ -49,7 +49,7 @@ Raw results are in [`bench/results/m5-pro-2026-11-25/`](../bench/results/m5-pro-
 
 AMD Ryzen 5 8645HS, 12 logical processors, Racket CS 9.3. The run alternated this tree with the previous one, AB then BA then AB. Each sample is a fresh process, one warmup, one timed call. The median is three samples. Token ids matched.
 
-The right-hand column is `8ed5dc6`. Comments in `src/` changed after that commit. The engine did not. The left-hand column is `fda38fb`, the same machine before packed queries were written straight into the cache. Generation includes the four-token prompt `Once upon a time`. Sampling is temperature 0.8, top-k 40, seed 1.
+The right-hand column is `c73c2df`. Comments in `src/` changed after that commit. The engine did not. The left-hand column is `9c7411c`, the same machine before packed queries were written straight into the cache. Generation includes the four-token prompt `Once upon a time`. Sampling is temperature 0.8, top-k 40, seed 1.
 
 | Workload | Previous, ms | This tree, ms | Allocated MB |
 | --- | ---: | ---: | ---: |
@@ -69,7 +69,7 @@ Raw samples are in [`bench/results/phase9-windows-2026-11-17/`](../bench/results
 
 ## The cache and attention revision, same laptop
 
-`1ad7035` on the left, `e8af302` on the right. Same alternating method, same prompt, same sampling. This is the revision that switched to one future per processor, scored only visible keys, sized the cache to the request, reused product buffers, and replaced the full top-k sort with a heap.
+`7d507ff` on the left, `0d8bcaf` on the right. Same alternating method, same prompt, same sampling. This is the revision that switched to one future per processor, scored only visible keys, sized the cache to the request, reused product buffers, and replaced the full top-k sort with a heap.
 
 | Workload | Before, ms | After, ms | Allocated MB |
 | --- | ---: | ---: | ---: |
@@ -89,9 +89,9 @@ Raw samples are in [`bench/results/phase8-windows-2026-11-17/`](../bench/results
 
 ## Two earlier revisions, same laptop
 
-`4e0631f` then `0f32e9b`, run one after the other rather than alternated. Same pinned weights, one warmup and three timed calls, each configuration in its own process. Token ids matched. The later of the two reads each attention head from the cache in place instead of copying the prefix out.
+`1fcbb84` then `7261f14`, run one after the other rather than alternated. Same pinned weights, one warmup and three timed calls, each configuration in its own process. Token ids matched. The later of the two reads each attention head from the cache in place instead of copying the prefix out.
 
-| Workload | `4e0631f` | `0f32e9b` |
+| Workload | `1fcbb84` | `7261f14` |
 | --- | ---: | ---: |
 | Load | 3.908 s | 3.244 s |
 | Prefill 16 | 223.684 ms | 232.051 ms |
@@ -104,7 +104,7 @@ Raw samples are in [`bench/results/phase8-windows-2026-11-17/`](../bench/results
 
 Greedy throughput is 20.14 tok/s, then 21.94. The 1000-token prefill is slower on the right. Loading ranged from 3.428 s to 4.700 s on the left and 3.065 s to 3.338 s on the right, so the load median is not a clean result. The row-shaped matmul is the biased Conv1D kernel, not the tied head.
 
-| Memory | `4e0631f` | `0f32e9b` |
+| Memory | `1fcbb84` | `7261f14` |
 | --- | ---: | ---: |
 | Resident after load and a collection | 1,092,109,688 bytes | 1,092,135,064 bytes |
 | Generation process peak, including load | 2,255,331,536 bytes | 2,255,368,432 bytes |
@@ -149,7 +149,7 @@ The extra allocation on the unrolled variants was measured. It looks like lost f
 
 ## Worker counts
 
-Same laptop, snapshot `5456731`. One fresh process per setting, settings in ascending order, one warmup and three timed calls. Only matrix products use the budget. Attention heads are scheduled on their own. Twelve was fastest for all three workloads, which is the host count, so the default stayed there.
+Same laptop, snapshot `9cc1371`. One fresh process per setting, settings in ascending order, one warmup and three timed calls. Only matrix products use the budget. Attention heads are scheduled on their own. Twelve was fastest for all three workloads, which is the host count, so the default stayed there.
 
 | Matrix workers | Greedy 128, ms | Prefill 128, ms | Tied head, ms |
 | ---: | ---: | ---: | ---: |
@@ -163,7 +163,7 @@ Raw results are in [`bench/results/phase9-workers-2026-11-17/`](../bench/results
 
 ## Cloud VM, earlier revision
 
-Intel Xeon, four logical processors, Racket CS 9.3. The tree is `3e6a0ef`. The result file records git `14746964b28ee2deb1c387745a45618207fd2fcd`, which is that same tree, from before the cache and attention changes. Do not line it up against the laptop tables.
+Intel Xeon, four logical processors, Racket CS 9.3. The tree is `844d4a3`. The result file records git `14746964b28ee2deb1c387745a45618207fd2fcd`, which is that same tree, from before the cache and attention changes. Do not line it up against the laptop tables.
 
 | configuration | median | peak bytes | pid |
 | --- | --- | ---: | ---: |

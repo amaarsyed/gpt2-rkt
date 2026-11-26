@@ -1,7 +1,7 @@
 /** Schema 1.0.0 execution trace. Field names match the Racket exporter. */
 
 export const TRACE_SCHEMA = '1.0.0';
-export const TRACE_COMMIT = '75286c5918a303582b7ce99b5378a2dba47ba5c8';
+export const TRACE_COMMIT = 'ae29f0007eda76012ed772be4e54b18ecbf56939';
 export const TRACE_PAIRS = 30240;
 export const TRACE_OUTPUT =
   ', the world was a place of great beauty and great danger. The world was';

@@ -3,7 +3,7 @@ param(
     [string]$OutDir = 'bench/results/phase8-windows-2026-11-17',
     [int]$Rounds = 3,
     [string]$Phase = 'phase8',
-    [string]$BaselineRef = '1ad7035',
+    [string]$BaselineRef = '7d507ff',
     [string]$BaselineSource = 'models/phase8-baseline',
     [switch]$Smoke
 )

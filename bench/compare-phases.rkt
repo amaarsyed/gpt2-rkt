@@ -20,8 +20,8 @@
 (define-runtime-path repo-root "..")
 (define-runtime-path self "compare-phases.rkt")
 (define phase-revisions
-  '(("phase6" . "4e0631f4bb12ebd9e11182174de6ec808195568d")
-    ("phase7" . "0f32e9b23836e07dd18c7d83c00caf84bb2c1e0b")))
+  '(("phase6" . "1fcbb84fc842c3a1b90c92ab216eed7fe2788908")
+    ("phase7" . "7261f1434d00e19ffc8025abc5246c15592f3a4d")))
 (define prompt "Once upon a time")
 
 (define (median xs)

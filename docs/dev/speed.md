@@ -6,19 +6,19 @@ The order below is the order the runs were taken. Each one compares two trees of
 
 ## Reading the cache in place
 
-`4e0631f` already preallocated the key and value buffers and used parallel matrix kernels. `0f32e9b` stops copying each head's filled prefix into a fresh tensor. It reads those columns by offset and applies the causal mask in place. An advanced cache handle becomes unusable, so a second call cannot overwrite the rows.
+`1fcbb84` already preallocated the key and value buffers and used parallel matrix kernels. `7261f14` stops copying each head's filled prefix into a fresh tensor. It reads those columns by offset and applies the causal mask in place. An advanced cache handle becomes unusable, so a second call cannot overwrite the rows.
 
 The two trees were run one after the other, not alternated. Generation of 128 tokens went from 6355.449 ms to 5835.142 ms, which is 20.14 tok/s to 21.94, including the prompt prefill. The 1000-token prefill went the other way, 14299.251 ms to 15463.771 ms. Resident memory after load and a collection was 1,092,109,688 bytes, then 1,092,135,064. The generation peak, including load, was 2,255,331,536 bytes, then 2,255,368,432. That peak is dominated by loading, so it does not show whether the copy removal saved transient allocation.
 
-A common driver, `bench/compare-phases.rkt` at `f8e414d`, calls each snapshot's own loader, tokenizer, generator, and matrix functions. Prefill repeats the token ids of `Once upon a time` out to 16, 128, 512, or 1000 tokens and then asks for one new token. Decode starts from the four-token prompt and generates 128 tokens. The timed section includes prompt prefill and cache allocation. It excludes model loading, tokenization, and terminal output. The matrix cases are `x * W + b` with ones for `x` and `W` and zeros for `b`. The `1×768×50257` case is that biased kernel, not `matmul-transposed-b`.
+A common driver, `bench/compare-phases.rkt` at `cd77acb`, calls each snapshot's own loader, tokenizer, generator, and matrix functions. Prefill repeats the token ids of `Once upon a time` out to 16, 128, 512, or 1000 tokens and then asks for one new token. Decode starts from the four-token prompt and generates 128 tokens. The timed section includes prompt prefill and cache allocation. It excludes model loading, tokenization, and terminal output. The matrix cases are `x * W + b` with ones for `x` and `W` and zeros for `b`. The `1×768×50257` case is that biased kernel, not `matmul-transposed-b`.
 
 To repeat it, from PowerShell at the repository root, with the pinned weights fetched:
 
 ```powershell
 $racketExe = 'C:\Program Files\Racket\Racket.exe'
 New-Item -ItemType Directory -Force models/phase-bench | Out-Null
-git archive --format=zip --output=models/phase-bench/a.zip 4e0631f
-git archive --format=zip --output=models/phase-bench/b.zip 0f32e9b
+git archive --format=zip --output=models/phase-bench/a.zip 1fcbb84
+git archive --format=zip --output=models/phase-bench/b.zip 7261f14
 Expand-Archive models/phase-bench/a.zip models/phase-bench/a
 Expand-Archive models/phase-bench/b.zip models/phase-bench/b
 & $racketExe bench/compare-phases.rkt `
@@ -31,7 +31,7 @@ Use a new output directory. The driver refuses to overwrite. Point `$racketExe` 
 
 ## One future per processor, and a smaller cache
 
-The baseline is `1ad7035`. The candidate is `e8af302`. Five changes went in together, so the comparison does not assign a percentage to each one:
+The baseline is `7d507ff`. The candidate is `0d8bcaf`. Five changes went in together, so the comparison does not assign a percentage to each one:
 
 - Matrix products use one future block per processor instead of four.
 - Attention scores only keys the query can see, and keeps one reusable score row per head. Prefill can run heads in parallel. Decode stays serial.
@@ -48,7 +48,7 @@ The statistical profiler returned zero stack samples. It does not say which func
 `bench/phase8.ps1` alternates the trees. From PowerShell, with the weights fetched:
 
 ```powershell
-git archive --format=zip --output=models/phase8-baseline.zip 1ad7035
+git archive --format=zip --output=models/phase8-baseline.zip 7d507ff
 Expand-Archive models/phase8-baseline.zip models/phase8-baseline
 ./bench/phase8.ps1 -OutDir bench/results/my-run
 ```
@@ -57,7 +57,7 @@ Use a fresh output directory. The summary is written only after every token-id c
 
 ## Packed queries, and the head kernels that lost
 
-`fda38fb` is the baseline. `8ed5dc6` is the candidate, and it is the engine in this tree. The cached block reads queries from the packed projection and writes keys and values straight into the cache, instead of allocating three tensors and copying two of them again. The uncached path still splits.
+`9c7411c` is the baseline. `c73c2df` is the candidate, and it is the engine in this tree. The cached block reads queries from the packed projection and writes keys and values straight into the cache, instead of allocating three tensors and copying two of them again. The uncached path still splits.
 
 The alternating comparison does not show a meaningful speedup. Greedy went from 27.85 tok/s to 28.03, sampled from 27.20 to 27.24. Allocation did drop: greedy generation from 626,025,536 bytes to 597,274,112, and the 1000-token prefill from 1,551,391,120 to 1,333,450,608. One baseline head sample took 35.005 ms while the other two took 7.283 and 7.467 ms, which is another reason not to treat a few tenths of a millisecond as a result. All 54 samples finished with matching token ids. The operating system reused one process id, so the log has 53 distinct pids. The driver still starts and waits for a separate child every time.
 
@@ -72,18 +72,18 @@ Four attempts to speed up the tied head were measured and removed:
 
 The scalar loop is the one that stayed. The extra allocation is consistent with the flonum unboxing being lost. That cause was not confirmed from the compiler.
 
-A worker sweep at `5456731` tried 1, 2, 4, 6, and 12 matrix workers. Twelve, the host count, was fastest for greedy generation (4509.203 ms), a 128-token prefill (1150.675 ms), and the tied head (6.722 ms). The default stayed "use every processor." `current-decode-workers` and `current-prefill-workers` remain so the sweep can be repeated on another machine. They cap matrix products only.
+A worker sweep at `9cc1371` tried 1, 2, 4, 6, and 12 matrix workers. Twelve, the host count, was fastest for greedy generation (4509.203 ms), a 128-token prefill (1150.675 ms), and the tied head (6.722 ms). The default stayed "use every processor." `current-decode-workers` and `current-prefill-workers` remain so the sweep can be repeated on another machine. They cap matrix products only.
 
 Repeat the comparison with the same driver, pointed at this pair:
 
 ```powershell
-git archive --format=zip --output=models/baseline.zip fda38fb
+git archive --format=zip --output=models/baseline.zip 9c7411c
 Expand-Archive models/baseline.zip models/baseline
-./bench/phase8.ps1 -Phase later -BaselineRef fda38fb `
+./bench/phase8.ps1 -Phase later -BaselineRef 9c7411c `
   -BaselineSource models/baseline -OutDir bench/results/my-run
 ```
 
-The script file is `bench/phase8.ps1`. `-Phase` is only the label it writes for the candidate, and its default baseline is `1ad7035`, so pass both flags for this pair. `-Smoke` runs the tiny model as a compatibility check, not a speed result. The worker sweep is `bench/sweep-workers.ps1` against a snapshot of `5456731`.
+The script file is `bench/phase8.ps1`. `-Phase` is only the label it writes for the candidate, and its default baseline is `7d507ff`, so pass both flags for this pair. `-Smoke` runs the tiny model as a compatibility check, not a speed result. The worker sweep is `bench/sweep-workers.ps1` against a snapshot of `9cc1371`.
 
 ## What was not tried
 
