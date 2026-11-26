@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Network, X } from 'lucide-react';
+import { DialScroll } from '@/components/ui/dial-scroll';
 import { MercuryMinimap } from '@/components/ui/toc-minimap-mercury';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { stillness } from '../figures/shared';
@@ -216,6 +217,7 @@ export function ScrollyLayout({ theme, children }: { theme: string; children: Re
         </div>
 
         <MercuryMinimap sections={TOC} className="sc-toc" />
+        <DialScroll marks={TOC.map((section) => `#${CSS.escape(section.id)}`).join(', ')} label="Position in the write-up" />
 
         <button
           type="button"

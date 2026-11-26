@@ -635,8 +635,13 @@
 /* ---------- mercury rail and the return pill ---------- */
 
 .wu-root .sc-toc {
-  right: 4px;
+  /* Clear of the DialKit-style scroll rail at the window edge. */
+  right: 30px;
   z-index: 30;
+}
+
+.wu-root .dial-scroll {
+  --dial-ink: var(--fg);
 }
 
 .wu-root .sc-toc button {
