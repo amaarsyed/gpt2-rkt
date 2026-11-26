@@ -12,11 +12,15 @@ export function DialScroll({
   marks = 'section[id]',
   label = 'Page position',
   className = '',
+  onSeek,
 }: {
   /** querySelectorAll for the elements whose tops get a hashmark */
   marks?: string;
   label?: string;
   className?: string;
+  /** How to jump to a scroll position. Defaults to window.scrollTo; pass a smooth-scroll
+      library's own jump (e.g. Lenis's scrollTo with immediate) so the two don't fight. */
+  onSeek?: (top: number) => void;
 }) {
   const root = useRef<HTMLDivElement | null>(null);
   const track = useRef<HTMLDivElement | null>(null);
@@ -60,11 +64,16 @@ export function DialScroll({
     };
   }, [marks]);
 
+  const go = (top: number) => {
+    const y = Math.min(room.current, Math.max(0, top));
+    if (onSeek) onSeek(y);
+    else window.scrollTo({ top: y, behavior: 'instant' as ScrollBehavior });
+  };
+
   const seek = (clientY: number) => {
     const box = track.current?.getBoundingClientRect();
     if (!box) return;
-    const p = Math.min(1, Math.max(0, (clientY - box.top) / box.height));
-    window.scrollTo({ top: p * room.current, behavior: 'instant' as ScrollBehavior });
+    go(((clientY - box.top) / box.height) * room.current);
   };
 
   const onDown = (event: PointerEvent<HTMLDivElement>) => {
@@ -83,9 +92,9 @@ export function DialScroll({
   const onKey = (event: KeyboardEvent<HTMLDivElement>) => {
     const page = window.innerHeight * 0.9;
     const by: Record<string, number> = { ArrowDown: 80, ArrowUp: -80, PageDown: page, PageUp: -page };
-    if (event.key in by) window.scrollBy({ top: by[event.key] });
-    else if (event.key === 'Home') window.scrollTo({ top: 0 });
-    else if (event.key === 'End') window.scrollTo({ top: room.current });
+    if (event.key in by) go(window.scrollY + (by[event.key] ?? 0));
+    else if (event.key === 'Home') go(0);
+    else if (event.key === 'End') go(room.current);
     else return;
     event.preventDefault();
   };

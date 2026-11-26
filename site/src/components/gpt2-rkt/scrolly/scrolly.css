@@ -640,10 +640,6 @@
   z-index: 30;
 }
 
-.wu-root .dial-scroll {
-  --dial-ink: var(--fg);
-}
-
 .wu-root .sc-toc button {
   padding-top: 0;
   padding-bottom: 0;

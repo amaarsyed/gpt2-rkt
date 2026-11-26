@@ -4,7 +4,8 @@
  * that appear while active, and the value in a mono face.
  */
 .dial-scroll {
-  --dial-ink: currentColor;
+  /* The page's ink when it names one, else the inherited text color. */
+  --dial-ink: var(--fg, currentColor);
   --dial-ease: cubic-bezier(0.23, 1, 0.32, 1);
   position: fixed;
   top: 50%;
