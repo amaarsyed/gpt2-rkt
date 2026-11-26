@@ -1,40 +1,30 @@
-/* The tick ruler (tick-ruler.tsx). Every line is placed from script. */
-.tr {
+/* The arrow-and-dots scrollbar (arrow-scrollbar.tsx). The lines are drawn from script. */
+.asb {
   position: fixed;
   inset: 0;
   z-index: 45;
   width: 100%;
   height: 100%;
   overflow: visible;
-  color: var(--tr-tick);
+  color: var(--asb-dot);
   pointer-events: none;
 }
 
-.tr line {
+.asb line {
   stroke: currentColor;
-  stroke-width: var(--tr-stroke, 2.5);
+  stroke-width: var(--asb-stroke, 4);
   stroke-linecap: round;
+  transition: stroke 250ms ease;
 }
 
-.tr-label {
-  fill: var(--accent, #f5c400);
-  font: 500 10.5px/1 "Geist Mono", "SF Mono", ui-monospace, Menlo, monospace;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
-  paint-order: stroke;
-  stroke: var(--bg, #141412);
-  stroke-width: 3px;
-  stroke-linejoin: round;
-}
-
-.tr .tr-hit,
-.tr .tr-cue-hit {
+.asb .asb-hit,
+.asb .asb-arrow-hit {
   fill: none;
   pointer-events: none;
 }
 
-.tr[data-state='ruler'] .tr-hit,
-.tr[data-state='cue'] .tr-cue-hit {
+.asb[data-state='tracking'] .asb-hit,
+.asb[data-state='idle'] .asb-arrow-hit {
   pointer-events: all;
   cursor: pointer;
 }
@@ -52,7 +42,13 @@
 
 /* Touch: the platform's own scroll indicator is better under a thumb. */
 @media not ((hover: hover) and (pointer: fine)) {
-  .tr {
+  .asb {
     display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .asb line {
+    transition: none;
   }
 }
