@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Network, X } from 'lucide-react';
-import { ArrowScrollbar } from '@/components/ui/arrow-scrollbar';
+import { TickRuler } from '@/components/ui/tick-ruler';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { stillness } from '../figures/shared';
 import type { VizApi } from '../visualizer/ExecutionVisualizer';
@@ -11,7 +11,7 @@ import { CARDS, STEP_CARD } from './stackCards';
 import { PlayBar } from './PlayBar';
 import { StepProvider, useStepTracker } from './Step';
 import { TermFocusContext } from './TermFocus';
-import { SCENES, type StepId, type StepScene } from './steps';
+import { SCENES, TOC, type StepId, type StepScene } from './steps';
 import './shadcn.css';
 import './scrolly.css';
 
@@ -215,8 +215,8 @@ export function ScrollyLayout({ theme, children }: { theme: string; children: Re
           </aside>
         </div>
 
-        {/* The dot column keeps the length the write-up's rail has always had. */}
-        <ArrowScrollbar length={(height) => Math.min(height * 0.46, 380)} />
+        {/* The ruler keeps the length the write-up's rail has always had. */}
+        <TickRuler length={(height) => Math.min(height * 0.46, 380)} sections={TOC} />
 
         <button
           type="button"
