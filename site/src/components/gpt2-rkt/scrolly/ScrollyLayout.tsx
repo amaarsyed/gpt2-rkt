@@ -101,11 +101,13 @@ export function ScrollyLayout({ theme, children }: { theme: string; children: Re
   }, [scene, setState]);
   const canStep = scene.stages.length > 1 || Boolean(scene.sweep);
 
+  // A node's card being open pauses the walk, so the graph stays put while it's read.
+  const reading = state.inspect;
   useEffect(() => {
-    if (!following || !trace || !autoplay || !canStep) return;
+    if (!following || !trace || !autoplay || !canStep || reading) return;
     const timer = window.setInterval(() => advance(1), (scene.sweep ? 700 : 1500) / state.speed);
     return () => window.clearInterval(timer);
-  }, [following, scene, trace, autoplay, canStep, advance, state.speed]);
+  }, [following, scene, trace, autoplay, canStep, advance, state.speed, reading]);
 
   // The play bar runs the whole recorded pass, every stage of every token, on its own.
   // Scrolling into the next block of text hands the graph back to the paper.

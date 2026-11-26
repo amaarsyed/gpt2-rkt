@@ -8,7 +8,6 @@ interface Props {
   onTab: (tab: WindowTab) => void;
   onClose: () => void;
   onCollapse: () => void;
-  onPlace?: () => void;
   children: ReactNode;
 }
 
@@ -18,10 +17,8 @@ const TABS: { id: WindowTab; label: string }[] = [
   { id: 'code', label: 'Code' },
 ];
 
-export function FloatWindow({ title, tab, onTab, onClose, onCollapse, onPlace, children }: Props) {
+export function FloatWindow({ title, tab, onTab, onClose, onCollapse, children }: Props) {
   const frame = useRef<HTMLElement>(null);
-  const placeRef = useRef(onPlace);
-  placeRef.current = onPlace;
   const [box, setBox] = useState({ x: 480, y: 8, w: 420, h: 360 });
 
   useLayoutEffect(() => {
@@ -46,7 +43,6 @@ export function FloatWindow({ title, tab, onTab, onClose, onCollapse, onPlace, c
     node.style.width = `${next.w}px`;
     node.style.height = `${next.h}px`;
     setBox(next);
-    placeRef.current?.();
   }, []);
 
   const drag = (event: ReactPointerEvent<HTMLElement>, mode: 'move' | 'resize') => {

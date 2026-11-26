@@ -219,8 +219,9 @@ export function NodeMath({ core }: { core: VizCore }) {
     };
   }, [open, setState]);
 
-  // Open beside the clicked node, and follow it while the camera settles: right of the node
-  // when it fits, otherwise left, always inside the visualizer.
+  // Open beside the clicked node without covering it. The graph never moves for the card,
+  // so the card does the fitting: right of the node, else left, else below or above,
+  // narrowing or shortening (the body scrolls) to stay inside the visualizer.
   const nodeId = open ? state.selectedNodeId : null;
   useLayoutEffect(() => {
     const el = card.current;
@@ -230,6 +231,8 @@ export function NodeMath({ core }: { core: VizCore }) {
     // On a phone the card is a bottom sheet (scrolly.css): no placing beside the node.
     if (window.matchMedia(SHEET).matches) {
       el.style.translate = '';
+      el.style.width = '';
+      el.style.maxHeight = '';
       el.dataset.placed = '';
       return;
     }
@@ -237,10 +240,10 @@ export function NodeMath({ core }: { core: VizCore }) {
     const place = () => {
       const hit = root.querySelector<HTMLElement>(`.viz-hit[data-node="${CSS.escape(nodeId)}"]`);
       const box = root.getBoundingClientRect();
-      const w = el.offsetWidth;
-      const h = el.offsetHeight;
       const margin = 12;
       const gap = 22;
+      const full = Math.min(380, box.width - margin * 2);
+      const tall = box.height - margin * 2;
       let ax = box.width / 2;
       let ay = box.height / 3;
       if (hit) {
@@ -248,13 +251,41 @@ export function NodeMath({ core }: { core: VizCore }) {
         ax = r.left + r.width / 2 - box.left;
         ay = r.top + r.height / 2 - box.top;
       }
-      const right = ax + gap + w <= box.width - margin;
-      let x = right ? ax + gap : ax - gap - w;
+      // Room on each side of the node, inside the visualizer.
+      const room = {
+        right: box.width - margin - (ax + gap),
+        left: ax - gap - margin,
+        below: box.height - margin - (ay + gap),
+        above: ay - gap - margin,
+      };
+      const narrowest = Math.min(full, 280);
+      const side: keyof typeof room =
+        room.right >= full ? 'right'
+          : room.left >= full ? 'left'
+            : Math.max(room.right, room.left) >= narrowest ? (room.right >= room.left ? 'right' : 'left')
+              : room.below >= 200 || room.above >= 200 ? (room.below >= room.above ? 'below' : 'above')
+                : (['right', 'left', 'below', 'above'] as const).reduce((a, b) => (room[b] > room[a] ? b : a));
+      const beside = side === 'right' || side === 'left';
+      const w = beside ? Math.max(Math.min(full, room[side]), Math.min(full, 220)) : full;
+      const maxH = beside ? tall : Math.max(Math.min(tall, room[side]), 140);
+      el.style.width = `${Math.round(w)}px`;
+      el.style.maxHeight = `${Math.round(maxH)}px`;
+      const h = el.offsetHeight;
+      let x: number;
+      let y: number;
+      if (beside) {
+        x = side === 'right' ? ax + gap : ax - gap - w;
+        y = ay - 28;
+      } else {
+        x = ax - w / 2;
+        y = side === 'below' ? ay + gap : ay - gap - h;
+      }
       x = Math.min(Math.max(x, margin), Math.max(margin, box.width - w - margin));
-      let y = ay - 28;
       y = Math.min(Math.max(y, margin), Math.max(margin, box.height - h - margin));
       el.style.translate = `${Math.round(x)}px ${Math.round(y)}px`;
-      el.style.transformOrigin = `${right ? 'left' : 'right'} ${Math.round(Math.min(Math.max(ay - y, 0), h))}px`;
+      el.style.transformOrigin = beside
+        ? `${side === 'right' ? 'left' : 'right'} ${Math.round(Math.min(Math.max(ay - y, 0), h))}px`
+        : `${Math.round(Math.min(Math.max(ax - x, 0), w))}px ${side === 'below' ? 'top' : 'bottom'}`;
       el.dataset.placed = '';
       frame = requestAnimationFrame(place);
     };

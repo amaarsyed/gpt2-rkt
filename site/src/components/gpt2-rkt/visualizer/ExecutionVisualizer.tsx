@@ -39,7 +39,7 @@ export interface ExecutionVisualizerProps {
   chrome?: 'full' | 'stage';
   /** A node for the camera to frame, eased, without opening Inspect. */
   focusId?: string | null;
-  /** Called when the reader takes the wheel: clicks a node or steps with the keys. */
+  /** Called when the reader takes the wheel by stepping with the keys. Clicking a node doesn't. */
   onUserInteract?: () => void;
   /** Lets an outside dock fit the camera or go fullscreen. */
   apiRef?: MutableRefObject<VizApi | null>;
@@ -103,16 +103,15 @@ export default function ExecutionVisualizer({ core, chrome = 'full', focusId: gu
       onHover: (id) => {
         setState((current) => (current.hoveredNodeId === id ? current : { ...current, hoveredNodeId: id }));
       },
+      // Clicking a node only opens its card. The layout, the camera and who drives the graph
+      // all stay as they were; the card places itself around the graph instead.
       onSelect: (id) => {
-        if (id) interactRef.current?.();
         const node = executionGraph().nodes.find((item) => item.id === id) ?? null;
         setState((current) => ({
           ...current,
           selectedNodeId: id,
           playing: node ? false : current.playing,
-          activeStageId: node?.stageId ?? current.activeStageId,
           inspect: node ? true : current.inspect,
-          mode: node ? 'execute' : current.mode,
           pair: node?.stageId && node.stageId === current.activeStageId ? current.pair : null,
         }));
         if (node) {
@@ -426,7 +425,6 @@ export default function ExecutionVisualizer({ core, chrome = 'full', focusId: gu
           onTab={setTab}
           onClose={() => setState((current) => ({ ...current, inspect: false, hoverPair: null }))}
           onCollapse={() => setCollapsed(true)}
-          onPlace={() => viewRef.current?.fit()}
         >
           {tab === 'what' ? (
             <div className="viz-what">

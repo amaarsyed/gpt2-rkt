@@ -226,13 +226,12 @@ export function createExecutionCanvas(canvas: HTMLCanvasElement, hooks: CanvasHo
 
   function frameFor(state: ExecutionState): Camera {
     const placed = graph.nodes.map((node) => {
-      const spot = state.mode === 'execute' || state.inspect ? node.execute : node.explore;
+      const spot = state.mode === 'execute' ? node.execute : node.explore;
       return { node, x: spot.x, y: spot.y };
     });
-    const guided = state.inspect ? null : (hooks.getFocus?.() ?? null);
-    if (state.inspect || guided) {
-      const want = guided ?? state.selectedNodeId;
-      const focus = placed.find((item) => item.node.id === want)
+    const guided = hooks.getFocus?.() ?? null;
+    if (guided) {
+      const focus = placed.find((item) => item.node.id === guided)
         ?? placed.find((item) => item.node.stageId === state.activeStageId)
         ?? placed[0];
       const ids = new Set(focus ? neighbors(graph, focus.node.id) : []);
@@ -341,33 +340,18 @@ export function createExecutionCanvas(canvas: HTMLCanvasElement, hooks: CanvasHo
   }
 
   function freeRect() {
-    const panel = canvas.closest('.viz')?.querySelector('.viz-floatwin');
-    const full = { x: 8, y: 8, width: Math.max(40, width - 16), height: Math.max(40, height - 16) };
-    if (!(panel instanceof HTMLElement)) return { x: 0, y: 0, width, height };
-    const canvasRect = canvas.getBoundingClientRect();
-    const panelRect = panel.getBoundingClientRect();
-    const left = panelRect.left - canvasRect.left;
-    const right = panelRect.right - canvasRect.left;
-    const top = panelRect.top - canvasRect.top;
-    const bottom = panelRect.bottom - canvasRect.top;
-    const overlaps = right > 4 && left < width - 4 && bottom > 4 && top < height - 4;
-    if (!overlaps) return { x: 0, y: 0, width, height };
-    const gap = 14;
-    const above = { x: 8, y: 8, width: Math.max(40, width - 16), height: Math.max(40, top - gap) };
-    const beside = { x: 8, y: 8, width: Math.max(40, left - gap), height: Math.max(40, height - 16) };
-    const sheet = top > height * 0.28 && bottom > height - 28;
-    if (sheet && above.height >= 120) return above;
-    if (beside.width >= 220 && beside.width * beside.height > above.width * above.height * 0.85) return beside;
-    if (above.height >= 140) return above;
-    return beside.width > 160 ? beside : full;
+    return { x: 0, y: 0, width, height };
   }
 
   function restage(state: ExecutionState, snap: boolean) {
-    const view = freeRect();
-    const guided = state.inspect ? null : (hooks.getFocus?.() ?? null);
-    const focus = state.inspect ? (state.selectedNodeId ?? state.activeStageId) : guided ? `g:${guided}` : '-';
-    const key = `${state.mode}|${focus}|${Math.round(width)}|${Math.round(height)}|${Math.round(view.x)}|${Math.round(view.y)}|${Math.round(view.width)}|${Math.round(view.height)}`;
+    const guided = hooks.getFocus?.() ?? null;
+    const focus = guided ? `g:${guided}` : '-';
+    const sized = `${Math.round(width)}|${Math.round(height)}`;
+    const key = `${state.mode}|${focus}|${sized}`;
     if (key === frameKey) return;
+    // While a node's card is open the graph holds still: only a resize, a mode change or the
+    // Fit button moves the camera, never the click that opened the card.
+    if (state.inspect && frameKey.startsWith(`${state.mode}|`) && frameKey.endsWith(`|${sized}`)) return;
     frameKey = key;
     const next = frameFor(state);
     target.x = next.x;
@@ -377,12 +361,12 @@ export function createExecutionCanvas(canvas: HTMLCanvasElement, hooks: CanvasHo
     heldMode = state.mode;
     const glide = Boolean(guided) || wasGuided;
     wasGuided = Boolean(guided);
-    if (snap || (!modeChanged && !glide) || state.inspect) {
+    if (snap || (!modeChanged && !glide)) {
       camera.x = next.x;
       camera.y = next.y;
       camera.k = next.k;
     }
-    if (snap || state.inspect) {
+    if (snap) {
       modeBlend = state.mode === 'execute' ? 1 : 0;
       for (const item of live) {
         const dest = nodeDest(state, item.node);
@@ -399,7 +383,7 @@ export function createExecutionCanvas(canvas: HTMLCanvasElement, hooks: CanvasHo
   }
 
   function nodeDest(state: ExecutionState, node: GraphNode) {
-    return state.mode === 'execute' || state.inspect ? node.execute : node.explore;
+    return state.mode === 'execute' ? node.execute : node.explore;
   }
 
   function settled(state: ExecutionState) {
