@@ -2157,3 +2157,14 @@
     display: none;
   }
 }
+
+/* The write-up is black and white (--accent is the page's ink, set in Writeup.tsx). Yellow stays
+   for the visualizer, the node cards and the code, which keep the look they always had. */
+.sc-viz,
+.nd,
+.cs-card,
+.rkt-card,
+.sc-code {
+  --accent: #f5c400;
+  --accent-foreground: #1c1b19;
+}

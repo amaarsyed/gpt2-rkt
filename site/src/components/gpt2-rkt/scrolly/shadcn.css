@@ -22,7 +22,7 @@
   --secondary: var(--faint);
   --secondary-foreground: var(--fg);
   --muted-foreground: var(--muted);
-  --accent-foreground: #1c1b19;
+  --accent-foreground: var(--bg);
   --border: var(--line);
   --input: var(--line);
   --ring: var(--accent);

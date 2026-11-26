@@ -41,7 +41,6 @@ export const AUTHORS = {
   amaar: { name: 'amaar', href: 'https://portfolio-v01-amber.vercel.app/#builds' },
 } as const;
 
-const ACCENT = '#f5c400';
 
 /** A section opens with a small uppercase kicker over a big bold heading. Its heading and opening lines are one step of the scroll. */
 function StepSection({ id, kicker, title, lead, children }: { id: Parameters<typeof Step>[0]['id']; kicker: string; title: string; lead?: ReactNode; children?: ReactNode }) {
@@ -118,7 +117,10 @@ export function Writeup() {
   useEffect(() => {
     const root = document.documentElement;
     for (const [key, value] of Object.entries(colors)) root.style.setProperty(`--${key}`, value);
-    root.style.setProperty('--accent', ACCENT);
+    // Black and white throughout: the accent is the page's own ink, so highlights, rules and
+    // the residual path read white on the dark page and black on the light one.
+    root.style.setProperty('--accent', colors.fg);
+    root.style.setProperty('--accent-foreground', colors.bg);
     root.style.background = colors.bg;
     root.style.colorScheme = theme;
     root.dataset.theme = theme;
