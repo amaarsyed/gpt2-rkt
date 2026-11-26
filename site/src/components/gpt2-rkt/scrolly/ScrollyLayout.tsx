@@ -1,7 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Network, X } from 'lucide-react';
-import { DialScroll } from '@/components/ui/dial-scroll';
-import { MercuryMinimap } from '@/components/ui/toc-minimap-mercury';
+import { ArrowScrollbar } from '@/components/ui/arrow-scrollbar';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { stillness } from '../figures/shared';
 import type { VizApi } from '../visualizer/ExecutionVisualizer';
@@ -12,7 +11,7 @@ import { CARDS, STEP_CARD } from './stackCards';
 import { PlayBar } from './PlayBar';
 import { StepProvider, useStepTracker } from './Step';
 import { TermFocusContext } from './TermFocus';
-import { SCENES, TOC, type StepId, type StepScene } from './steps';
+import { SCENES, type StepId, type StepScene } from './steps';
 import './shadcn.css';
 import './scrolly.css';
 
@@ -216,8 +215,8 @@ export function ScrollyLayout({ theme, children }: { theme: string; children: Re
           </aside>
         </div>
 
-        <MercuryMinimap sections={TOC} className="sc-toc" />
-        <DialScroll marks={TOC.map((section) => `#${CSS.escape(section.id)}`).join(', ')} label="Position in the write-up" />
+        {/* The dot column keeps the length the write-up's rail has always had. */}
+        <ArrowScrollbar length={(height) => Math.min(height * 0.46, 380)} />
 
         <button
           type="button"

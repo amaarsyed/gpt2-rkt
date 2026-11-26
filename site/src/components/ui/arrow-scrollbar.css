@@ -1,0 +1,54 @@
+/* The arrow-and-dots scrollbar (arrow-scrollbar.tsx). The lines are drawn from script. */
+.asb {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  color: var(--asb-dot);
+  pointer-events: none;
+}
+
+.asb line {
+  stroke: currentColor;
+  stroke-width: var(--asb-stroke, 4);
+  stroke-linecap: round;
+  transition: stroke 250ms ease;
+}
+
+.asb .asb-hit,
+.asb .asb-arrow-hit {
+  fill: none;
+  pointer-events: none;
+}
+
+.asb[data-state='tracking'] .asb-hit,
+.asb[data-state='idle'] .asb-arrow-hit {
+  pointer-events: all;
+  cursor: pointer;
+}
+
+/* Mouse and trackpad: it stands in for the browser's scrollbar. */
+@media (hover: hover) and (pointer: fine) {
+  html {
+    scrollbar-width: none;
+  }
+
+  html::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Touch: the platform's own scroll indicator is better under a thumb. */
+@media not ((hover: hover) and (pointer: fine)) {
+  .asb {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .asb line {
+    transition: none;
+  }
+}

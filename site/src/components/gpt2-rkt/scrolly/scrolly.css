@@ -634,26 +634,6 @@
 
 /* ---------- mercury rail and the return pill ---------- */
 
-.wu-root .sc-toc {
-  /* Clear of the DialKit-style scroll rail at the window edge. */
-  right: 30px;
-  z-index: 30;
-}
-
-.wu-root .sc-toc button {
-  padding-top: 0;
-  padding-bottom: 0;
-  padding-left: 0;
-  border: 0;
-  background: none;
-  color: inherit;
-}
-
-.wu-root .sc-toc span {
-  font-family: var(--sc-mono);
-  font-size: 11px;
-}
-
 .sc-return {
   position: fixed;
   left: max(var(--wu-gutter), calc(50% - var(--sc-max) / 2 + var(--wu-gutter)));
@@ -713,11 +693,6 @@
     height: 38dvh;
     min-height: 240px;
     flex: none;
-  }
-
-  /* The minimap rail has no room beside a stacked page. */
-  .wu-root .sc-toc {
-    display: none;
   }
 
   .sc-chips,
@@ -787,10 +762,6 @@
   .sc-dock-transport {
     flex-wrap: wrap;
   }
-
-  .wu-root .sc-toc {
-    display: none;
-  }
 }
 
 /* A phone held sideways: a sticky stage would leave ~100px to read in, so it scrolls away. */
@@ -820,10 +791,6 @@
     height: 70dvh;
     min-height: 220px;
     flex: none;
-  }
-
-  .wu-root .sc-toc {
-    display: none;
   }
 }
 
