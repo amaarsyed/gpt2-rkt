@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Reveal } from '../Reveal';
 import { palette, paletteDark } from '../../lib/content';
-import { readStoredTheme, resolveDark, saveTheme, systemDarkQuery } from '../../lib/theme';
+import { systemDarkQuery } from '../../lib/theme';
 import { CacheTable } from './Blocks';
 import { ScrollyLayout } from './scrolly/ScrollyLayout';
 import { Step } from './scrolly/Step';
@@ -110,7 +110,7 @@ function SourcePill() {
 }
 
 export function Writeup() {
-  const [dark, setDark] = useState(resolveDark);
+  const [dark, setDark] = useState(() => systemDarkQuery().matches);
   const colors = dark ? paletteDark : palette;
   const theme = dark ? 'dark' : 'light';
 
@@ -127,19 +127,17 @@ export function Writeup() {
     document.body.style.background = colors.bg;
   }, [colors, theme]);
 
-  // Follow the device's light/dark setting live, until they pick one themselves.
+  // The theme is the device's light/dark setting, and follows it live. The toggle only flips it
+  // for now; it isn't saved, so the next load or the next change of the device setting wins.
   useEffect(() => {
     const query = systemDarkQuery();
-    const onChange = (e: MediaQueryListEvent) => {
-      if (!readStoredTheme()) setDark(e.matches);
-    };
+    const onChange = (e: MediaQueryListEvent) => setDark(e.matches);
     query.addEventListener('change', onChange);
     return () => query.removeEventListener('change', onChange);
   }, []);
 
   const toggleTheme = () => {
     const next = !dark;
-    saveTheme(next);
     setDark(next);
   };
 

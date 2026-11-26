@@ -13,12 +13,9 @@
     />
     <link rel="icon" href="/favicon.png" type="image/png" />
     <script>
-      // Paint the right background before the page loads: their saved pick,
-      // else the device's light/dark setting.
+      // Paint the right background before the page loads, from the device's light/dark setting.
       try {
-        var t = sessionStorage.getItem('portfolio-theme');
-        var d = t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
-        if (d) {
+        if (matchMedia('(prefers-color-scheme: dark)').matches) {
           document.documentElement.style.background = '#121210';
           document.documentElement.style.colorScheme = 'dark';
         }
