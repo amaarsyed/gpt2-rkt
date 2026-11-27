@@ -104,6 +104,9 @@ export function createExecutionCanvas(canvas: HTMLCanvasElement, hooks: CanvasHo
     return palette;
   };
 
+  // Nodes are drawn a little larger on a narrow screen, where the graph is scaled right down.
+  const nodeGrow = () => (width < 520 ? 1.25 : 1);
+
   const resize = () => {
     const rect = canvas.getBoundingClientRect();
     width = Math.max(1, rect.width);
@@ -127,16 +130,26 @@ export function createExecutionCanvas(canvas: HTMLCanvasElement, hooks: CanvasHo
     y: (sy - height / 2) / camera.k + camera.y,
   });
 
+  // A finger is far blunter than a cursor: on touch screens every node gets at least a 26px
+  // (52px across) target, whatever the zoom, and a press may wander a little and still be a tap.
+  const touch = window.matchMedia('(pointer: coarse)');
+  const MIN_TOUCH_RADIUS = 26;
+
   const hit = (sx: number, sy: number): string | null => {
     const world = screenToWorld(sx, sy);
     let best: string | null = null;
     let bestD = Infinity;
     for (const item of live) {
-      const pad = (item.node.radius + 8) / camera.k;
+      const pad = Math.max(
+        (item.node.radius * nodeGrow() + 8) / camera.k,
+        touch.matches ? MIN_TOUCH_RADIUS / camera.k : 0,
+      );
       const d = Math.hypot(world.x - item.x, world.y - item.y);
-      if (d <= pad && d < bestD) {
+      // Where a stage node and a small file node both reach the tap, the stage node wins.
+      const score = item.node.role === 'module' ? d * 1.6 : d;
+      if (d <= pad && score < bestD) {
         best = item.node.id;
-        bestD = d;
+        bestD = score;
       }
     }
     return best;
@@ -163,7 +176,8 @@ export function createExecutionCanvas(canvas: HTMLCanvasElement, hooks: CanvasHo
     if (dragging) {
       const dx = point.x - pointer.x;
       const dy = point.y - pointer.y;
-      if (dx * dx + dy * dy > 16) moved = true;
+      const slop = touch.matches ? 10 : 4;
+      if (dx * dx + dy * dy > slop * slop) moved = true;
       if (moved) {
         camera.x = pointer.cx - dx / camera.k;
         camera.y = pointer.cy - dy / camera.k;
@@ -671,7 +685,7 @@ export function createExecutionCanvas(canvas: HTMLCanvasElement, hooks: CanvasHo
       || (selectedNode?.role === 'module' && selectedNode.id === node.id)
     );
     const color = roleColor(node.role, colors);
-    const radius = node.radius * (node.role === 'module' ? 1 - modeBlend * 0.12 : 1);
+    const radius = node.radius * nodeGrow() * (node.role === 'module' ? 1 - modeBlend * 0.12 : 1);
     const inactive = dark && modeBlend > 0.6 && !active && !selected && !linked;
     context.save();
     context.globalAlpha = dim ? 0.42 : inactive ? 0.45 : 1;
