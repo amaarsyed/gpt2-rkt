@@ -205,6 +205,14 @@ export function createExecutionCanvas(canvas: HTMLCanvasElement, hooks: CanvasHo
     wake();
   };
 
+  // The browser took the gesture (a vertical drag became a page scroll): that is not a tap, so
+  // nothing is selected or deselected, and the pan simply ends.
+  const onPointerCancel = () => {
+    if (!dragging) return;
+    dragging = false;
+    wake();
+  };
+
   const onPointerLeave = () => {
     if (dragging) return;
     if (hoverId !== null) {
@@ -234,7 +242,7 @@ export function createExecutionCanvas(canvas: HTMLCanvasElement, hooks: CanvasHo
   canvas.addEventListener('pointerdown', onPointerDown);
   canvas.addEventListener('pointermove', onPointerMove);
   canvas.addEventListener('pointerup', onPointerUp);
-  canvas.addEventListener('pointercancel', onPointerUp);
+  canvas.addEventListener('pointercancel', onPointerCancel);
   canvas.addEventListener('pointerleave', onPointerLeave);
   canvas.addEventListener('wheel', onWheel, { passive: false });
 
@@ -792,7 +800,7 @@ export function createExecutionCanvas(canvas: HTMLCanvasElement, hooks: CanvasHo
       canvas.removeEventListener('pointerdown', onPointerDown);
       canvas.removeEventListener('pointermove', onPointerMove);
       canvas.removeEventListener('pointerup', onPointerUp);
-      canvas.removeEventListener('pointercancel', onPointerUp);
+      canvas.removeEventListener('pointercancel', onPointerCancel);
       canvas.removeEventListener('pointerleave', onPointerLeave);
       canvas.removeEventListener('wheel', onWheel);
     },

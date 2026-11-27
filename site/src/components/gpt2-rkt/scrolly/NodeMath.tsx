@@ -195,24 +195,43 @@ export function NodeMath({ core }: { core: VizCore }) {
     if (!open) return;
     const close = () => setState((current) => ({ ...current, inspect: false, selectedNodeId: null, hoverPair: null }));
     const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') close(); };
-    // A press anywhere but the card closes it, unless that press picked another node.
+    // A tap anywhere but the card closes it, unless that tap picked another node. It is judged
+    // when the press ends, not when it starts: a finger stays down well past the moment the
+    // canvas picks a node, and a drag (panning the graph) isn't a tap at all.
+    let down: { x: number; y: number; before: string | null; onCard: boolean } | null = null;
     const onDown = (event: PointerEvent) => {
-      if (card.current?.contains(event.target as Node)) return;
-      const before = selectedRef.current;
-      window.setTimeout(() => { if (selectedRef.current === before) close(); }, 80);
+      down = {
+        x: event.clientX,
+        y: event.clientY,
+        before: selectedRef.current,
+        onCard: Boolean(card.current?.contains(event.target as Node)),
+      };
     };
-    // Leaving the visualizer side closes it, after a short grace period.
+    const onUp = (event: PointerEvent) => {
+      const start = down;
+      down = null;
+      if (!start || start.onCard) return;
+      if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 10) return;
+      window.setTimeout(() => { if (selectedRef.current === start.before) close(); }, 80);
+    };
+    // Leaving the visualizer side closes it, after a short grace period. A mouse only: a touch
+    // "leaves" the instant the finger lifts, which would close the card right after every tap.
     const stage = card.current?.closest('.sc-stage');
     let timer = 0;
-    const onLeave = () => { timer = window.setTimeout(close, 350); };
+    const onLeave = (event: Event) => {
+      if ((event as PointerEvent).pointerType === 'touch') return;
+      timer = window.setTimeout(close, 350);
+    };
     const onEnter = () => window.clearTimeout(timer);
     window.addEventListener('keydown', onKey);
     window.addEventListener('pointerdown', onDown, true);
+    window.addEventListener('pointerup', onUp, true);
     stage?.addEventListener('pointerleave', onLeave);
     stage?.addEventListener('pointerenter', onEnter);
     return () => {
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('pointerdown', onDown, true);
+      window.removeEventListener('pointerup', onUp, true);
       stage?.removeEventListener('pointerleave', onLeave);
       stage?.removeEventListener('pointerenter', onEnter);
       window.clearTimeout(timer);
