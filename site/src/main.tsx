@@ -1,5 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { Analytics } from '@vercel/analytics/react';
 import { Writeup } from './components/gpt2-rkt/Writeup';
 import { shouldPlayStartup, StartupIntro } from './components/StartupIntro';
 import { playPop } from './lib/audio';
@@ -25,6 +26,7 @@ createRoot(document.getElementById('root')!).render(
     {/* Native scrolling: smooth on every device, with nothing in JavaScript between the
         wheel or finger and the page. */}
     <Writeup />
+    <Analytics />
     {playStartup && <StartupIntro />}
   </StrictMode>,
 );
